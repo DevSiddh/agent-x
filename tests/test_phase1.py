@@ -15,7 +15,7 @@ import pytest
 # Allow imports from project root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from phase1.webhook.hmac_validator import validate
+from phase1.webhook.hmac_validator import validate_raw as validate
 from phase1.log_fetcher.cleaner import clean, extract_error_window, clean_and_extract
 from phase1.dataset.schema import validate_jsonl_record, FAILURE_CATEGORIES
 

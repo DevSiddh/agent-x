@@ -13,6 +13,31 @@ from fastapi import Request
 log = structlog.get_logger()
 
 
+def validate_raw(body: bytes, sig_header: str) -> bool:
+    """
+    Validate HMAC-SHA256 signature from raw body + header string.
+    Synchronous — usable in tests without a Request object.
+
+    Raises:
+        EnvironmentError: If GITHUB_WEBHOOK_SECRET is not set.
+    """
+    secret_str = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+    if not secret_str:
+        raise EnvironmentError("GITHUB_WEBHOOK_SECRET is not set")
+
+    if not sig_header:
+        log.warning("hmac.missing_signature")
+        return False
+
+    expected = "sha256=" + hmac.new(secret_str.encode(), body, hashlib.sha256).hexdigest()
+    result = hmac.compare_digest(expected, sig_header)
+
+    if not result:
+        log.warning("hmac.signature_mismatch")
+
+    return result
+
+
 async def validate(request: Request) -> bool:
     """
     Validate a GitHub webhook HMAC-SHA256 signature.
@@ -29,23 +54,9 @@ async def validate(request: Request) -> bool:
     Raises:
         EnvironmentError: If GITHUB_WEBHOOK_SECRET is not set.
     """
-    secret_str = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
-    if not secret_str:
-        raise EnvironmentError("GITHUB_WEBHOOK_SECRET is not set")
-
     sig_header = request.headers.get("X-Hub-Signature-256", "")
-    if not sig_header:
-        log.warning("hmac.missing_signature")
-        return False
-
     body = await request.body()
-    expected = "sha256=" + hmac.new(secret_str.encode(), body, hashlib.sha256).hexdigest()
-    result = hmac.compare_digest(expected, sig_header)
-
-    if not result:
-        log.warning("hmac.signature_mismatch")
-
-    return result
+    return validate_raw(body, sig_header)
 
 
 if __name__ == "__main__":
