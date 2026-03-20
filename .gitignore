@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets — NEVER commit these
+.env
+.env.local
+*.env
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+report.json
+.pytest_json_report/
+
+# SQLite queues — runtime data, not source
+phase1/webhook/queue.db
+phase1/webhook/*.db
+
+# Spike output — throwaway
+spike/__pycache__/
+
+# Fixtures runtime state — git repos inside git repo
+fixtures/*/.*
+fixtures/*/.git/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/

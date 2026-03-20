@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python phase1/webhook/hmac_validator.py)",
+      "Bash(python phase1/webhook/server.py)",
+      "Bash(python -m pytest tests/test_webhook.py -v)",
+      "WebSearch",
+      "Bash(git config:*)",
+      "Skill(update-config)",
+      "Bash(python scripts/verify_env.py)",
+      "Bash(where act:*)",
+      "Bash(bash scripts/install_hooks.sh)",
+      "Bash(mkdir -p ~/.claude/templates)",
+      "Bash(mkdir -p ~/.claude/skills)",
+      "Bash(cp ~/.claude/templates/PROJECT_TEMPLATE.md \"C:/Users/yagne/OneDrive/Desktop/project x/agent-x/docs/PROJECT_TEMPLATE.md\")",
+      "Bash(cp ~/.claude/templates/scaffold.md \"C:/Users/yagne/OneDrive/Desktop/project x/agent-x/docs/scaffold.md\")",
+      "Bash(cp ~/.claude/CLAUDE.md \"C:/Users/yagne/OneDrive/Desktop/project x/agent-x/docs/GLOBAL_CLAUDE.md\")",
+      "WebFetch(domain:x.com)"
+    ]
+  }
+}
