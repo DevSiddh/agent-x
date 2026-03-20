@@ -100,12 +100,12 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 4 — PatchGen (PENDING)
+## STEP 4 — PatchGen (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase2/patch_gen/worker.py | PENDING | — | DeepSeek, retry logic |
-| phase2/patch_gen/sanitiser.py | PENDING | — | strip fences, line count |
-| tests/test_patch_gen.py | PENDING | — | |
+| phase2/patch_gen/worker.py | DONE | PASS | DeepSeek, retry logic, P11 |
+| phase2/patch_gen/sanitiser.py | DONE | PASS | P3 strip fences, line count |
+| tests/test_patch_gen.py | DONE | 19 passed | |
 
 ---
 
