@@ -141,10 +141,13 @@ subprocess.run(["pytest", "tests/", "--tb=short", "--json-report"], cwd=fixture_
 pipeline.py ran all 5 synthetic cases. All 5 logged in memory/memory.jsonl.
 165 tests passing. requirements.txt fully pinned. Structlog unified.
 
-## Upgrade Queue (v1 SHIPPED — UNLOCKED)
-v1.1 → Context Builder + RAG retrieval (3 similar past fixes in prompt)
-v1.2 → Thompson Sampling strategy engine (exploit vs explore)
-v1.3 → Embedding classifier (all-MiniLM-L6-v2, replaces regex)
+## Upgrade Queue
+v1.1 → Context Builder + RAG retrieval          [DONE — Step 9]
+v1.2 → Patch quality fix (syn_002/004/005)       [NEXT — Step 10]
+v1.3 → Thompson Sampling strategy engine         [LOCKED — needs 50+ memory entries]
+        Unlock condition: wc -l memory/memory.jsonl >= 50
+        Reason: Beta(1,1) = random with no data — not useful until real runs accumulate
+v1.4 → Embedding classifier (all-MiniLM-L6-v2)  [after Step 11]
 v2.0 → Researcher / Agentic RAG
 v2.1 → Local mode / watchdog observer
 v2.2 → LLM rotation (Qwen → Kimi fallbacks)

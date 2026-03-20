@@ -3,9 +3,10 @@
 # Each prompt is self-contained. Claude needs nothing else.
 # Last updated: 2026-03-20
 #
-# STATUS: v1 COMPLETE + CLEAN — 2026-03-20
-# Steps 0–8 DONE. 165 tests passing. memory.jsonl has 5 entries.
-# Next: say "step 9" to start v1.1 (Context Builder + RAG retrieval)
+# STATUS: v1.1 COMPLETE — 2026-03-20
+# Steps 0–9 DONE. 180 tests passing. memory.jsonl has 5 entries.
+# Next: say "step 10" → v1.2 patch quality fix (syn_002/004/005 still rejected)
+# After step 10: say "step 11" → Thompson Sampling (LOCKED until memory >= 50 entries)
 
 ---
 
@@ -406,34 +407,94 @@ DONE WHEN:
 
 ---
 
-## STEP 10 — v1.2: Thompson Sampling Strategy Engine
+## STEP 10 — v1.2: Patch Quality Fix (syn_002 / syn_004 / syn_005)
 
 ```
-You are building Agent-X v1.2 — Thompson Sampling strategy engine.
+You are fixing Agent-X v1.2 — DeepSeek patch quality.
 Read CLAUDE.md, docs/progress.md, docs/problems_and_solutions.md before touching anything.
-v1.1 must be DONE before starting this step.
+v1.1 must be DONE. 180 tests pass. Do not break existing tests.
+
+CONTEXT:
+3 of 5 synthetic cases are still rejected every run:
+  syn_002 EnvironmentError → DeepSeek omits +++ header line
+  syn_004 RuntimeError     → DeepSeek uses wrong file path in diff header
+  syn_005 EnvironmentError → DeepSeek generates corrupt / truncated patch
+
+ROOT CAUSE: prompt does not give enough constraints on diff format.
+
+FIX THIS STEP:
+
+1. phase2/patch_gen/worker.py — harden the system prompt:
+   - Add explicit unified diff format example in system prompt
+   - System prompt must show: exact --- a/file / +++ b/file format
+   - System prompt must forbid: any explanation, markdown, fences, partial diffs
+   - Retry prompt (attempt > 1) must include: previous rejection reason + exact format reminder
+
+2. phase1/dataset/synthetic.jsonl — verify expected patches for syn_002/004/005:
+   - Confirm each expected_patch field is a valid unified diff
+   - Fix any malformed expected patches if found
+
+3. tests/test_patch_gen.py — add regression tests:
+   - Test system prompt contains "--- a/" format instruction
+   - Test retry prompt contains rejection_reason AND format reminder
+   - Test validate_patch rejects diff with missing +++ line
+   - Test validate_patch rejects diff with wrong path format
+
+DONE WHEN:
+- pytest tests/ → all pass (180+ tests)
+- python phase2/pipeline.py → at least 4/5 accepted (up from 2/5)
+- docs/progress.md updated: STEP 10 DONE — v1.2
+```
+
+---
+
+## STEP 11 — v1.3: Thompson Sampling Strategy Engine
+# PREREQUISITE: needs 50+ real pipeline runs in memory.jsonl before this step adds value.
+# Unlock condition: check memory/memory.jsonl line count. If < 50, do Step 12 first.
+
+```
+You are building Agent-X v1.3 — Thompson Sampling strategy engine.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Step 10 must be DONE. Check: wc -l memory/memory.jsonl — must be >= 50 lines.
+If < 50 lines: STOP. Tell user "Thompson needs more data — run the pipeline on real repos first."
+
+WHY THOMPSON NEEDS DATA:
+Thompson Sampling starts at Beta(1,1) = uniform random for all arms.
+With < 50 runs it has no signal to exploit — it's identical to random.
+With 50+ runs per category it learns which fix strategies win and exploits them.
 
 BUILD THIS STEP:
 
-1. phase2/strategy/thompson.py
-   - ThompsonSampler: tracks (alpha, beta) per bug_signature
-   - sample(bug_signature: str) -> float  → sample from Beta(alpha, beta)
-   - update(bug_signature: str, accepted: bool) → update alpha/beta
-   - Persists state to memory/thompson_state.json
-   - __main__ smoke test
+1. phase2/strategy/__init__.py  (empty)
 
-2. Update phase2/pipeline.py
-   - After DecisionEngine: call sampler.update(bug_signature, accepted=(decision=="accepted"))
-   - Before DeepSeekWorker: log sampler.sample(bug_signature) as exploration_score
+2. phase2/strategy/thompson.py
+   - ThompsonSampler: tracks {bug_signature: (alpha, beta)} — one arm per signature
+   - sample(bug_signature: str) -> float
+     Draw from Beta(alpha, beta). New arms start at Beta(1, 1).
+   - update(bug_signature: str, accepted: bool) -> None
+     accepted=True  → alpha += 1
+     accepted=False → beta  += 1
+   - Persists state to memory/thompson_state.json (lazy path, never module-level)
+   - load() / save() called internally — never raises (same pattern as memory store)
+   - __main__ smoke test: 10 updates, sample, verify state file written
 
-3. tests/test_thompson.py
-   - Test alpha/beta update on accept
-   - Test alpha/beta update on reject
-   - Test persistence to JSON
-   - Test sample returns float in [0, 1]
+3. Update phase2/pipeline.py
+   - Import ThompsonSampler lazily (inside run())
+   - Before DeepSeekWorker: score = sampler.sample(bug_signature) → log as exploration_score
+   - After DecisionEngine: sampler.update(bug_signature, accepted=(decision=="accepted"))
+   - No other pipeline changes
+
+4. tests/test_thompson.py
+   - Test alpha increments on accepted
+   - Test beta increments on rejected
+   - Test new signature starts at Beta(1,1) → alpha=1, beta=1
+   - Test sample() returns float in [0.0, 1.0]
+   - Test state persists to JSON and reloads correctly
+   - Test save/load never raises on bad path (P8 pattern)
+   - Test pipeline integration: exploration_score logged after classify
 
 DONE WHEN:
 - pytest tests/ → all pass
-- Thompson state persists across runs
-- docs/progress.md updated: STEP 10 DONE — v1.2
+- memory/thompson_state.json written after pipeline run
+- docs/progress.md updated: STEP 11 DONE — v1.3 Thompson
 ```

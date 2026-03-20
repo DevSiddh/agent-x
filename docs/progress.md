@@ -176,6 +176,28 @@ Last test run: 2026-03-20
 
 ---
 
+## STEP 10 — v1.2: Patch Quality Fix (PENDING)
+| Task | Status | Notes |
+|------|--------|-------|
+| Harden system prompt in worker.py | PENDING | Add diff format example, forbid fences |
+| Verify synthetic.jsonl expected patches | PENDING | Check syn_002/004/005 expected_patch fields |
+| Add regression tests in test_patch_gen.py | PENDING | Format constraints, rejection reason in retry |
+| Pipeline re-run: target 4/5 accepted | PENDING | Up from 2/5 |
+
+---
+
+## STEP 11 — v1.3: Thompson Sampling (LOCKED — needs 50+ memory entries)
+| Task | Status | Notes |
+|------|--------|-------|
+| phase2/strategy/thompson.py | LOCKED | Unlock when memory.jsonl >= 50 lines |
+| Pipeline integration | LOCKED | |
+| tests/test_thompson.py | LOCKED | |
+
+Reason: Beta(1,1) = uniform random with < 50 runs. No signal to exploit yet.
+Unlock: after Step 10 + real webhook data flowing in.
+
+---
+
 ## Test Run History
 | Date | Command | Result |
 |------|---------|--------|
