@@ -10,7 +10,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: IN PROGRESS — Phase 1 partially done
+## Overall Status: v1 COMPLETE — 2026-03-20
 
 ---
 
@@ -126,13 +126,20 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 7 — Pipeline (PENDING)
+## STEP 7 — Pipeline (DONE — v1 COMPLETE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase2/pipeline.py | PENDING | — | wire all stages, try/finally |
-| tests/test_pipeline.py | PENDING | — | |
+| phase2/pipeline.py | DONE | PASS | all stages wired, try/finally P8 |
+| tests/test_pipeline.py | DONE | 7 passed | mocked DeepSeek |
 
-v1 DONE when: all 5 synthetic cases in memory.jsonl
+Pipeline run results (2026-03-20):
+- syn_001 DependencyError  → accepted  (patch applied cleanly)
+- syn_002 EnvironmentError → rejected  (DeepSeek omitted +++ header)
+- syn_003 ConfigError      → accepted  (patch applied cleanly)
+- syn_004 RuntimeError     → rejected  (DeepSeek used wrong file path)
+- syn_005 EnvironmentError → rejected  (corrupt patch from DeepSeek)
+
+All 5 logged in memory/memory.jsonl — v1 DONE condition satisfied.
 
 ---
 
