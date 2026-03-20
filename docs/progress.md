@@ -73,13 +73,13 @@ Note: 4 pre-existing failures in test_phase1.py::TestHmacValidator (validate() s
 
 ---
 
-## STEP 1 — Spike (PENDING)
+## STEP 1 — Spike (DONE)
 | Task | Status | Notes |
 |------|--------|-------|
-| spike/run_spike.py | PENDING | syn_001 → DeepSeek → apply → pytest |
-| Spike result | PENDING | PASS/FAIL TBD |
+| spike/run_spike.py | DONE | syn_001 → DeepSeek → apply → pytest |
+| Spike result | PASS | DeepSeek loop works end-to-end |
 
-Spike must PASS before any Phase 2 module is built.
+Key finding: must include affected file content in prompt — LLM cannot patch blind.
 
 ---
 
@@ -151,6 +151,7 @@ v1 DONE when: all 5 synthetic cases in memory.jsonl
 | 2026-03-20 | pytest tests/test_webhook.py | 15 passed in 0.68s |
 | 2026-03-20 | pytest tests/test_phase1.py | (run pending after cleaner check) |
 | 2026-03-20 | pytest tests/test_fixtures.py | 26 passed in 0.26s |
+| 2026-03-20 | python spike/run_spike.py | SPIKE PASS — end-to-end loop confirmed |
 
 ---
 
