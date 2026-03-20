@@ -5,6 +5,7 @@ Tracks per-bug-signature Beta distributions.
 Learns which fix strategies succeed over time.
 Requires 50+ pipeline runs to have meaningful signal.
 """
+
 from __future__ import annotations
 
 import json
@@ -100,9 +101,7 @@ class ThompsonSampler:
         try:
             path = _state_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(
-                json.dumps(self._state, indent=2), encoding="utf-8"
-            )
+            path.write_text(json.dumps(self._state, indent=2), encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             log.warning("thompson.save_failed", error=str(exc))
 
@@ -125,6 +124,7 @@ class ThompsonSampler:
 
 if __name__ == "__main__":
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
     import tempfile
@@ -153,7 +153,7 @@ if __name__ == "__main__":
             print(f"  arm alpha={arm['alpha']} beta={arm['beta']}")
             print(f"  sample score={score:.4f}")
             assert arm["alpha"] == 6, f"expected 6 got {arm['alpha']}"  # 1 + 5
-            assert arm["beta"] == 3, f"expected 3 got {arm['beta']}"    # 1 + 2
+            assert arm["beta"] == 3, f"expected 3 got {arm['beta']}"  # 1 + 2
             assert 0.0 <= score <= 1.0
 
             assert tmp_state.exists(), "state file not written"

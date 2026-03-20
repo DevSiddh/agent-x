@@ -41,6 +41,11 @@ YOUR BRAIN (curiosity + interests + problem)
 │                                             │
 │  FAIL any gate → IDEAS GRAVEYARD            │
 │  PASS all 4    → continue                   │
+│                                             │
+│  Claude-only fallback: If Gemini/ChatGPT/   │
+│  Perplexity unavailable, type:              │
+│  "idea solo — [your idea]" and Claude       │
+│  simulates all 4 gates internally.          │
 └─────────────────────────────────────────────┘
     │
     ▼

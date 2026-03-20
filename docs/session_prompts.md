@@ -501,6 +501,199 @@ DONE WHEN:
 
 ---
 
+## STEP 12 — Claude Code Hooks (safety + auto-format + compaction)
+# Source: 50 Claude Code Tips — tips 38, 39, 40, 41
+# These carry to EVERY future project via ~/.claude/settings.json
+
+```
+You are hardening Agent-X's Claude Code session environment.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Step 11 must be DONE. 206 tests must still pass after this step.
+
+CONTEXT:
+CLAUDE.md is advisory (~80% compliance). Hooks are 100% deterministic.
+Three hooks to add to .claude/settings.json (create if absent):
+
+BUILD THIS STEP:
+
+1. .claude/settings.json — add all three hooks:
+
+   Hook A — PreToolUse: block destructive bash commands
+   Fires BEFORE Claude runs any Bash command.
+   Blocks: rm -rf, drop table, truncate, git reset --hard, git push --force
+   If matched: print "BLOCKED: destructive command" and exit 2.
+
+   Hook B — PostToolUse: auto-format Python after every file edit
+   Fires AFTER Claude edits or writes any .py file.
+   Runs: python -m black "$CLAUDE_FILE_PATH" --quiet 2>/dev/null || true
+   (|| true so format failures never block Claude)
+
+   Hook C — Notification: re-inject key context after compaction
+   Fires on compaction events.
+   Prints reminder: current task + modified files + hard rules summary.
+   Keeps Claude from losing the thread in long sessions.
+
+   Final .claude/settings.json shape:
+   {
+     "hooks": {
+       "PreToolUse": [
+         {
+           "matcher": "Bash",
+           "hooks": [{"type": "command", "command": "...block script..."}]
+         }
+       ],
+       "PostToolUse": [
+         {
+           "matcher": "Edit|Write",
+           "hooks": [{"type": "command", "command": "...black script..."}]
+         }
+       ],
+       "Notification": [
+         {
+           "matcher": "compact",
+           "hooks": [{"type": "command", "command": "...reminder script..."}]
+         }
+       ]
+     }
+   }
+
+2. Verify hooks work:
+   - Try running: !rm -rf /tmp/test_hook → must be blocked
+   - Edit any .py file → black must run silently
+   - No existing tests should break
+
+3. Copy .claude/settings.json to ~/.claude/settings.json
+   so ALL future projects inherit these hooks automatically.
+
+DONE WHEN:
+- .claude/settings.json exists with all 3 hooks
+- ~/.claude/settings.json updated (global)
+- Destructive command is blocked
+- Python auto-format runs silently on edit
+- pytest tests/ → still 206 passed
+- docs/progress.md updated: STEP 12 DONE
+```
+
+---
+
+## STEP 13 — File-type Specific Rules (.claude/rules/)
+# Source: 50 Claude Code Tips — tip 31
+# Rules that load ONLY when Claude touches relevant files. Keeps CLAUDE.md lean.
+
+```
+You are adding file-type specific rules for Agent-X.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Step 12 must be DONE.
+
+CONTEXT:
+.claude/rules/ files load automatically when Claude works on matching file types.
+This means Python rules never load when Claude reads docs. Zero token waste.
+
+BUILD THIS STEP:
+
+1. .claude/rules/python.md — loads for all *.py files
+   Add paths frontmatter so it only loads for Python:
+   ---
+   paths:
+     - "**/*.py"
+   ---
+   Content (Agent-X Python standards, extracted from CLAUDE.md):
+   - Type hints on every function — no exceptions
+   - structlog only — never import logging
+   - Pydantic v2 models for all data structures
+   - Env vars lazy inside functions — os.environ.get() never at module level
+   - pathlib.Path everywhere — no string path concatenation
+   - Specific exceptions only — never bare except:
+   - Every module has if __name__ == "__main__": smoke test
+   - pytest after every file written
+
+2. .claude/rules/tests.md — loads for tests/*.py
+   ---
+   paths:
+     - "tests/**/*.py"
+   ---
+   Content:
+   - Every test class covers: happy path + at least one failure path
+   - No mocking of core logic — mock only external calls (API, subprocess)
+   - Test function names must describe the behavior being tested
+   - Use tmp_path fixture for any file I/O
+   - Never hardcode paths — use fixture_path from conftest or tmp_path
+
+3. .claude/rules/docs.md — loads for *.md files
+   ---
+   paths:
+     - "**/*.md"
+   ---
+   Content:
+   - context.md: 80 lines max — index only, never add content directly
+   - progress.md: PENDING or DONE only — no diary entries
+   - CLAUDE.md: only add a rule if it would prevent a real mistake
+
+DONE WHEN:
+- All 3 rule files exist in .claude/rules/
+- paths frontmatter correctly set in each
+- pytest tests/ → still 206 passed (rules are read-only, no code changes)
+- docs/progress.md updated: STEP 13 DONE
+```
+
+---
+
+## STEP 14 — CLAUDE.md Litmus Audit + @imports
+# Source: 50 Claude Code Tips — tips 29, 32
+# Litmus test: "Would Claude make a mistake without this line?" If no → delete it.
+# @imports: reference heavy docs instead of embedding them in CLAUDE.md.
+
+```
+You are auditing and slimming CLAUDE.md using the litmus test + @imports.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Step 13 must be DONE.
+
+CONTEXT:
+Every unnecessary line in CLAUDE.md dilutes the lines that matter.
+There is roughly a 150-200 instruction budget before compliance drops.
+@imports let Claude read detail on demand without loading it every session.
+
+BUILD THIS STEP:
+
+1. Litmus test — audit every line in CLAUDE.md:
+   For each line ask: "Would Claude make a mistake without this?"
+   - YES → keep it
+   - NO  → delete it
+   - Already enforced by a hook or test → delete it (hook owns it now)
+   - Duplicated in .claude/rules/python.md → delete it from CLAUDE.md
+
+2. Replace embedded content with @imports where possible:
+   Instead of embedding problem descriptions, write:
+   See @docs/problems_and_solutions.md for known bugs and fixes.
+   Instead of embedding pipeline details in CLAUDE.md, write:
+   Pipeline order → @context.md
+   Session prompts → @docs/session_prompts.md
+
+3. Add the self-update habit rule (tip 30):
+   ## SELF-UPDATE RULE
+   When Claude makes a mistake: say "update CLAUDE.md so this doesn't happen again"
+   Claude writes its own rule. It loads next session automatically.
+
+4. Add the hooks-vs-suggestions rule (tip 38):
+   ## ENFORCEMENT RULE
+   CLAUDE.md = suggestions (80% compliance)
+   Hooks (.claude/settings.json) = requirements (100% compliance)
+   If a rule must ALWAYS be followed → make it a hook, not a line here.
+
+DONE WHEN:
+- CLAUDE.md is shorter than before (lines deleted, not added)
+- @imports reference heavy docs instead of embedding
+- SELF-UPDATE RULE and ENFORCEMENT RULE added
+- pytest tests/ → still 206 passed
+- docs/progress.md updated: STEP 14 DONE
+
+COPY TO GLOBAL:
+After passing: copy updated CLAUDE.md patterns to ~/.claude/CLAUDE.md
+so all future projects start with the litmus-tested habits.
+```
+
+---
+
 ## AUDIT — Run before starting any new phase
 
 When to use:

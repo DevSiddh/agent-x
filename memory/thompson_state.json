@@ -1,0 +1,10 @@
+{
+  "synthetic:DependencyError:missing_setuptools:requirements.txt": {
+    "alpha": 6,
+    "beta": 3
+  },
+  "synthetic:DependencyError:ModuleNotFoundError:requirements.txt": {
+    "alpha": 32,
+    "beta": 1
+  }
+}
