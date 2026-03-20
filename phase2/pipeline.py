@@ -30,6 +30,7 @@ from phase2.context_builder import build_context
 from phase2.logging_config import configure_logging
 configure_logging()
 
+from agent_y.reasoner import ReasonerError, reason
 from phase1.log_fetcher.cleaner import clean_and_extract
 from phase2.classifier.regex_pass import ClassifierResult, classify
 from phase2.classifier.safety_gate import check as gate_check
@@ -88,8 +89,9 @@ def run(case_id: str) -> MemoryEntry:
 
     Stages (strict order per CLAUDE.md):
     Observer → LogParser → RegexClassifier → PreSafetyGate
-    → ContextBuilder → DeepSeekWorker → PostSafetyValidation
-    → Executor → RegressionCheck → DecisionEngine → MemoryStore
+    → ThompsonSampler.sample() → ContextBuilder → Agent-Y Reasoner
+    → DeepSeekWorker → PostSafetyValidation → Executor
+    → RegressionCheck → DecisionEngine → ThompsonSampler.update() → MemoryStore
 
     try/finally guarantees MemoryStore write on every run. (P8)
     """
@@ -147,6 +149,20 @@ def run(case_id: str) -> MemoryEntry:
         rollback(fixture_path)  # ensure clean state
         context = build_context(classifier_result, fixture_path, error_lines=cleaned)
 
+        # 5.5 — Agent-Y Reasoner (optional — fallback to raw context on failure)
+        try:
+            reasoner_output = reason(context, classifier_result)
+            log.info(
+                "reasoner.ok",
+                case_id=case_id,
+                strategy=reasoner_output.strategy[:80],
+                confidence=reasoner_output.confidence,
+            )
+            enriched_context = context + "\n\nSTRATEGY: " + reasoner_output.strategy
+        except ReasonerError as exc:
+            log.warning("reasoner.fallback", case_id=case_id, error=str(exc))
+            enriched_context = context  # Agent-X baseline — pipeline continues
+
         # 6 — Run tests BEFORE patch (regression baseline)
         before: TestReport = run_tests(fixture_path)
 
@@ -154,7 +170,7 @@ def run(case_id: str) -> MemoryEntry:
         worker_result = generate_patch(
             error_lines=cleaned,
             classifier_result=classifier_result,
-            context=context,
+            context=enriched_context,
         )
         diff = worker_result.diff
         outcome = outcome.model_copy(update={

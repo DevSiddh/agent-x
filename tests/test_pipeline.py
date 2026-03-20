@@ -174,3 +174,81 @@ class TestPipelineRun:
 
         assert len(entries) == 5
         assert all(isinstance(e, MemoryEntry) for e in entries)
+
+    def test_reasoner_enriches_context_before_deepseek(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reasoner is called between build_context and generate_patch."""
+        import phase2.pipeline as pl_mod
+        from agent_y.reasoner import ReasonerOutput
+
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+        mock_output = ReasonerOutput(
+            action="repair",
+            reasoning="setuptools is missing",
+            strategy="install missing dependency package via requirements.txt",
+            confidence=0.9,
+            files_to_change=["requirements.txt"],
+        )
+
+        captured_context: list[str] = []
+
+        def fake_generate_patch(error_lines, classifier_result, context):
+            captured_context.append(context)
+            return pl_mod.generate_patch.__wrapped__(
+                error_lines, classifier_result, context
+            ) if hasattr(pl_mod.generate_patch, "__wrapped__") else MagicMock(
+                diff=VALID_DIFF,
+                model_used="deepseek-chat",
+                attempt=1,
+                sanitiser_result=MagicMock(line_count=3),
+            )
+
+        with patch("phase2.pipeline.reason", return_value=mock_output):
+            with patch("phase2.pipeline.generate_patch") as mock_gen:
+                mock_gen.return_value = MagicMock(
+                    diff=VALID_DIFF,
+                    model_used="deepseek-chat",
+                    attempt=1,
+                    sanitiser_result=MagicMock(line_count=3, passed=True),
+                )
+                with patch("openai.OpenAI") as mock_openai:
+                    client = MagicMock()
+                    client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
+                    mock_openai.return_value = client
+                    run("syn_001")
+
+            # Verify generate_patch was called with enriched context (has STRATEGY: prefix)
+            call_kwargs = mock_gen.call_args
+            passed_context = call_kwargs.kwargs.get("context") or call_kwargs.args[2]
+            assert "STRATEGY:" in passed_context
+            assert mock_output.strategy in passed_context
+
+    def test_reasoner_error_caught_pipeline_continues(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ReasonerError must be caught — pipeline continues with raw context (P5)."""
+        from agent_y.reasoner import ReasonerError
+
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+        with patch("phase2.pipeline.reason", side_effect=ReasonerError("mock failure")):
+            with patch("phase2.pipeline.generate_patch") as mock_gen:
+                mock_gen.return_value = MagicMock(
+                    diff=VALID_DIFF,
+                    model_used="deepseek-chat",
+                    attempt=1,
+                    sanitiser_result=MagicMock(line_count=3, passed=True),
+                )
+                with patch("openai.OpenAI") as mock_openai:
+                    client = MagicMock()
+                    client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
+                    mock_openai.return_value = client
+                    entry = run("syn_001")
+
+        # Pipeline must complete — not crash — when Reasoner fails
+        assert isinstance(entry, MemoryEntry)
+        assert entry.decision in {"accepted", "rejected", "escalated", "abstained"}
+        # generate_patch must still have been called (fallback to raw context)
+        assert mock_gen.called
