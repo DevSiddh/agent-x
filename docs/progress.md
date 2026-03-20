@@ -143,12 +143,20 @@ All 5 logged in memory/memory.jsonl — v1 DONE condition satisfied.
 
 ---
 
-## STEP 8 — Cleanup (PENDING)
-| Task | Status |
-|------|--------|
-| Unified structlog config | PENDING |
-| requirements.txt pinned | PENDING |
-| Full test suite run | PENDING |
+## STEP 8 — Cleanup (DONE — 2026-03-20)
+| Task | Status | Notes |
+|------|--------|-------|
+| phase2/logging_config.py | DONE | configure_logging(), JSON+ISO timestamps, wired into pipeline.py |
+| stdlib logging audit | DONE | No stdlib logging found anywhere — all structlog |
+| requirements.txt pinned | DONE | All versions pinned to exact installed versions |
+| Full test suite run | DONE | 165 passed, 0 failures |
+
+Last test run: 2026-03-20
+```
+165 passed in 33.85s
+```
+
+## v1 COMPLETE + CLEAN — 2026-03-20
 
 ---
 

@@ -26,6 +26,9 @@ if str(_REPO_ROOT) not in sys.path:
 # Load .env so DEEPSEEK_API_KEY is available when running directly
 load_dotenv(_REPO_ROOT / ".env")
 
+from phase2.logging_config import configure_logging
+configure_logging()
+
 from phase1.log_fetcher.cleaner import clean_and_extract
 from phase2.classifier.regex_pass import ClassifierResult, classify
 from phase2.classifier.safety_gate import check as gate_check
