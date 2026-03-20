@@ -30,12 +30,12 @@ Last test run: 2026-03-20
 
 ---
 
-### Log Fetcher (PARTIAL)
+### Log Fetcher (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
 | phase1/log_fetcher/cleaner.py | DONE | PASS | clean + extract_error_window |
-| phase1/log_fetcher/fetcher.py | NEEDS REBUILD | — | P4 lazy token, P9 zip sort, P14 structlog |
-| tests/test_fetcher.py | PENDING | — | write when fetcher rebuilt |
+| phase1/log_fetcher/fetcher.py | DONE | PASS | P4 P9 P14 fixed |
+| tests/test_fetcher.py | DONE | 13 passed | lazy token, sort, mock HTTP |
 
 ---
 
@@ -83,11 +83,11 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 2 — fetcher.py rebuild (PENDING)
+## STEP 2 — fetcher.py rebuild (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase1/log_fetcher/fetcher.py | PENDING | — | P4 P9 P14 |
-| tests/test_fetcher.py | PENDING | — | |
+| phase1/log_fetcher/fetcher.py | DONE | PASS | P4 P9 P14 fixed, structlog |
+| tests/test_fetcher.py | DONE | 13 passed | |
 
 ---
 
@@ -152,6 +152,7 @@ v1 DONE when: all 5 synthetic cases in memory.jsonl
 | 2026-03-20 | pytest tests/test_phase1.py | (run pending after cleaner check) |
 | 2026-03-20 | pytest tests/test_fixtures.py | 26 passed in 0.26s |
 | 2026-03-20 | python spike/run_spike.py | SPIKE PASS — end-to-end loop confirmed |
+| 2026-03-20 | pytest tests/test_fetcher.py | 13 passed in 0.31s |
 
 ---
 
