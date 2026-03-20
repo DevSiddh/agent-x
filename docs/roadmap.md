@@ -193,8 +193,8 @@ Priority: POLISH
 | Step 10 | v1.2 Patch quality fix (5/5 accepted) | DONE |
 | Step 11 | v1.3 Thompson Sampling | DONE |
 | Step 12 | Hooks (auto-format + block destructive + compaction) | DONE |
-| Step 13 | .claude/rules/ (Python + tests + docs) | PENDING |
-| Step 14 | CLAUDE.md litmus audit + @imports | PENDING |
+| Step 13 | .claude/rules/ (Python + tests + docs) | DONE |
+| Step 14 | CLAUDE.md litmus audit + @imports | DONE |
 
 ---
 

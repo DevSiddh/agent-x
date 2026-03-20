@@ -200,6 +200,39 @@ Pipeline results (2026-03-20):
 
 ---
 
+## STEP 14 — CLAUDE.md Litmus Audit + @imports (DONE — 2026-03-20)
+| Task | Status | Notes |
+|------|--------|-------|
+| Litmus test applied | DONE | 153 → 73 lines — deleted coding standards (now in rules/), stale build history, duplicate sections |
+| @imports added | DONE | progress.md, session_prompts.md, problems_and_solutions.md referenced not embedded |
+| ENFORCEMENT RULE added | DONE | CLAUDE.md=suggestions, hooks=100%, rules=on-demand |
+| SELF-UPDATE RULE added | DONE | "update CLAUDE.md so this doesn't happen again" habit |
+| Upgrade Queue fixed | DONE | Steps 12-14 marked DONE, v2.0=Agent-Y NEXT |
+| Pipeline updated | DONE | Thompson positions added (sample before, update after DeepSeekWorker) |
+
+Last test run: 2026-03-20
+```
+206 passed in 37.51s
+```
+
+---
+
+## STEP 13 — File-type Rules (.claude/rules/) (DONE — 2026-03-20)
+| File | Status | Notes |
+|------|--------|-------|
+| .claude/rules/python.md | DONE | loads for **/*.py — type hints, structlog, pathlib, lazy env vars |
+| .claude/rules/tests.md | DONE | loads for tests/**/*.py — coverage, mocking, naming, assertions |
+| .claude/rules/docs.md | DONE | loads for **/*.md — context.md 80-line limit, progress.md states |
+
+Last test run: 2026-03-20
+```
+206 passed in 33.37s
+```
+
+Rules load on-demand only — zero token cost when not touching those file types.
+
+---
+
 ## STEP 12 — Claude Code Hooks (DONE — 2026-03-20)
 | Task | Status | Notes |
 |------|--------|-------|
