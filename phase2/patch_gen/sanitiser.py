@@ -58,45 +58,62 @@ def count_diff_lines(diff: str) -> int:
     return count
 
 
-def validate_patch(diff: str) -> SanitiserResult:
+def validate_patch(diff: str, affected_file: str = "") -> SanitiserResult:
     """
     Validate a diff string for git apply compatibility.
 
     Rejects if:
     - diff doesn't start with ---
+    - no +++ b/ line present in first 4 lines (syn_002 pattern)
+    - affected_file provided and --- a/<path> doesn't contain it
     - line_count > MAX_DIFF_LINES (15)
 
     Returns SanitiserResult with passed, diff, line_count, rejection_reason.
     """
     cleaned = strip_markdown_fences(diff)
     line_count = count_diff_lines(cleaned)
+    lines = cleaned.splitlines()
 
     if not cleaned.startswith("---"):
         reason = "diff does not start with --- (not a valid unified diff)"
         log.warning("sanitiser.rejected", reason=reason, line_count=line_count)
         return SanitiserResult(
-            passed=False,
-            diff=cleaned,
-            line_count=line_count,
-            rejection_reason=reason,
+            passed=False, diff=cleaned, line_count=line_count, rejection_reason=reason,
         )
+
+    # Check +++ b/ line exists within first 4 lines
+    has_plus_header = any(l.startswith("+++") for l in lines[:4])
+    if not has_plus_header:
+        reason = "missing +++ b/<file> line — unified diff header incomplete"
+        log.warning("sanitiser.rejected", reason=reason, line_count=line_count)
+        return SanitiserResult(
+            passed=False, diff=cleaned, line_count=line_count, rejection_reason=reason,
+        )
+
+    # Check file path matches affected_file when provided
+    if affected_file:
+        norm = affected_file.replace("\\", "/")
+        header_line = lines[0]  # --- a/<path>
+        if norm not in header_line:
+            reason = (
+                f"wrong file path in diff header: expected '{norm}' "
+                f"but got '{header_line}'"
+            )
+            log.warning("sanitiser.rejected", reason=reason, line_count=line_count)
+            return SanitiserResult(
+                passed=False, diff=cleaned, line_count=line_count, rejection_reason=reason,
+            )
 
     if line_count > MAX_DIFF_LINES:
         reason = f"patch too large: {line_count} lines (max {MAX_DIFF_LINES})"
         log.warning("sanitiser.rejected", reason=reason, line_count=line_count)
         return SanitiserResult(
-            passed=False,
-            diff=cleaned,
-            line_count=line_count,
-            rejection_reason=reason,
+            passed=False, diff=cleaned, line_count=line_count, rejection_reason=reason,
         )
 
     log.info("sanitiser.accepted", line_count=line_count)
     return SanitiserResult(
-        passed=True,
-        diff=cleaned,
-        line_count=line_count,
-        rejection_reason="",
+        passed=True, diff=cleaned, line_count=line_count, rejection_reason="",
     )
 
 

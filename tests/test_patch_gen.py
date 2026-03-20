@@ -221,3 +221,75 @@ class TestGeneratePatch:
                 classifier_result=DUMMY_CLASSIFIER,
                 context="content",
             )
+
+    def test_system_prompt_contains_format_example(self) -> None:
+        """System prompt must show exact --- a/ +++ b/ format so LLM knows."""
+        from phase2.patch_gen.worker import SYSTEM_PROMPT
+        assert "--- a/" in SYSTEM_PROMPT
+        assert "+++ b/" in SYSTEM_PROMPT
+
+    def test_retry_prompt_contains_format_reminder(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """P11 — retry prompt must include format reminder with exact path."""
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+        bad = "--- a/requirements.txt\n@@ -1 +1 @@\n+setuptools"  # missing +++
+        good = VALID_DIFF
+        responses = [_mock_llm(bad), _mock_llm(good)]
+
+        with patch("openai.OpenAI") as mock_openai:
+            client = MagicMock()
+            client.chat.completions.create.side_effect = responses
+            mock_openai.return_value = client
+
+            generate_patch(
+                error_lines=["ModuleNotFoundError"],
+                classifier_result=DUMMY_CLASSIFIER,
+                context="content",
+            )
+
+        calls = client.chat.completions.create.call_args_list
+        retry_user = next(
+            m["content"]
+            for m in calls[1][1]["messages"]
+            if m["role"] == "user"
+        )
+        assert "REJECTED" in retry_user
+        assert "REQUIRED FORMAT REMINDER" in retry_user
+        assert "+++ b/" in retry_user
+
+
+# ── sanitiser path + header checks ───────────────────────────────────────────
+
+class TestValidatePatchExtended:
+
+    def test_rejects_missing_plus_header(self) -> None:
+        """syn_002 pattern — DeepSeek omits the +++ b/ line."""
+        diff_no_plus = "--- a/Makefile\n@@ -3,1 +3,1 @@\n-old\n+new"
+        r = validate_patch(diff_no_plus)
+        assert r.passed is False
+        assert "+++" in r.rejection_reason
+
+    def test_accepts_diff_with_plus_header(self) -> None:
+        diff = "--- a/Makefile\n+++ b/Makefile\n@@ -3,1 +3,1 @@\n-old\n+new"
+        r = validate_patch(diff)
+        assert r.passed is True
+
+    def test_rejects_wrong_file_path(self) -> None:
+        """syn_004 pattern — DeepSeek uses wrong path in diff header."""
+        diff = "--- a/schemas.py\n+++ b/schemas.py\n@@ -1 +1 @@\n+fix"
+        r = validate_patch(diff, affected_file="app/schemas.py")
+        assert r.passed is False
+        assert "app/schemas.py" in r.rejection_reason
+
+    def test_accepts_correct_file_path(self) -> None:
+        diff = "--- a/app/schemas.py\n+++ b/app/schemas.py\n@@ -1 +1 @@\n+fix"
+        r = validate_patch(diff, affected_file="app/schemas.py")
+        assert r.passed is True
+
+    def test_no_path_check_when_affected_file_empty(self) -> None:
+        """When no affected_file provided, path check is skipped."""
+        diff = "--- a/anything.py\n+++ b/anything.py\n@@ -1 +1 @@\n+fix"
+        r = validate_patch(diff, affected_file="")
+        assert r.passed is True

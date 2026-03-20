@@ -27,11 +27,26 @@ MAX_RETRIES = 3
 MODEL = "deepseek-chat"
 BASE_URL = "https://api.deepseek.com"
 
-SYSTEM_PROMPT = (
-    "You are a CI/CD repair bot. "
-    "Return ONLY a unified diff. No explanation. No markdown. "
-    "No code fences. Start with --- and nothing else before it."
-)
+SYSTEM_PROMPT = """\
+You are a CI/CD repair bot. Return ONLY a raw unified diff. Nothing else.
+
+REQUIRED FORMAT (follow exactly):
+--- a/<filename>
++++ b/<filename>
+@@ -N,M +N,M @@
+ context line
+-removed line
++added line
+
+RULES:
+- Line 1 MUST be: --- a/<exact filename from user message>
+- Line 2 MUST be: +++ b/<exact filename from user message>
+- Never omit the +++ line
+- Never use a different filename than the one specified
+- No explanation, no markdown, no code fences, no preamble
+- Maximum 15 changed lines (+ or - lines, not counting headers)
+- Start with --- and nothing before it\
+"""
 
 
 class WorkerResult(BaseModel):
@@ -58,12 +73,16 @@ def _build_initial_prompt(
     context: str,
 ) -> str:
     error_text = "\n".join(error_lines)
+    f = classifier_result.affected_file
     return (
         f"CI/CD failure log:\n{error_text}\n\n"
         f"Failure category: {classifier_result.category}\n"
-        f"Affected file: {classifier_result.affected_file}\n\n"
-        f"File content:\n{context}\n\n"
-        f"Fix this. Return unified diff targeting {classifier_result.affected_file} only."
+        f"Affected file: {f}\n\n"
+        f"{context}\n\n"
+        f"Fix this failure. Return ONLY a unified diff for file '{f}'.\n"
+        f"The diff header MUST be:\n"
+        f"--- a/{f}\n"
+        f"+++ b/{f}"
     )
 
 
@@ -77,15 +96,22 @@ def _build_retry_prompt(
 ) -> str:
     """Retry prompt MUST differ from initial — includes rejection context (P11)."""
     error_text = "\n".join(error_lines)
+    f = classifier_result.affected_file
     return (
         f"Your previous patch was REJECTED.\n"
         f"Reason: {rejection_reason}\n"
-        f"Lines generated: {line_count} (maximum allowed: {MAX_RETRIES * 5})\n\n"
-        f"Attempt {attempt} of {MAX_RETRIES}. Use a simpler, more targeted fix.\n\n"
+        f"Lines generated: {line_count} (maximum allowed: 15)\n\n"
+        f"Attempt {attempt} of {MAX_RETRIES}. Fix ONLY what the rejection reason says.\n\n"
+        f"REQUIRED FORMAT REMINDER:\n"
+        f"--- a/{f}\n"
+        f"+++ b/{f}\n"
+        f"@@ -N,M +N,M @@\n"
+        f" context\n"
+        f"-removed\n"
+        f"+added\n\n"
         f"CI/CD failure log:\n{error_text}\n\n"
-        f"Affected file: {classifier_result.affected_file}\n"
-        f"File content:\n{context}\n\n"
-        f"Return ONLY the unified diff. Start with ---. No markdown. No explanation."
+        f"{context}\n\n"
+        f"Return ONLY the unified diff for '{f}'. Start with ---. Nothing else."
     )
 
 
@@ -145,7 +171,7 @@ def generate_patch(
         raw_response = response.choices[0].message.content or ""
         log.info("worker.raw_response", attempt=attempt, length=len(raw_response))
 
-        last_result = validate_patch(raw_response)
+        last_result = validate_patch(raw_response, affected_file=classifier_result.affected_file)
 
         if last_result.passed:
             log.info("worker.patch_accepted", attempt=attempt, lines=last_result.line_count)

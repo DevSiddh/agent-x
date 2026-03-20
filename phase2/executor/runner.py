@@ -44,7 +44,7 @@ def apply_patch(patch_diff: str, fixture_path: Path) -> ApplyResult:
 
     try:
         result = subprocess.run(
-            ["git", "apply", str(tmp_path)],
+            ["git", "apply", "--ignore-whitespace", "--recount", str(tmp_path)],
             cwd=fixture_path,
             capture_output=True,
             text=True,
