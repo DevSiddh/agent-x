@@ -118,11 +118,11 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 6 — Memory Store (PENDING)
+## STEP 6 — Memory Store (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase2/memory/store.py | PENDING | — | dedup, append, schema |
-| tests/test_memory.py | PENDING | — | |
+| phase2/memory/store.py | DONE | PASS | append never raises P8, dedup P6, get_similar |
+| tests/test_memory.py | DONE | 17 passed | |
 
 ---
 
