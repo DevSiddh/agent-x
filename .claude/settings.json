@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -qE 'rm -rf|drop table|truncate|reset --hard|push --force'; then echo 'BLOCKED: destructive command — use git checkout -- . for rollback, or ask user first' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATH\" | grep -q '\\.py$' && python -m black \"$CLAUDE_FILE_PATH\" --quiet 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== COMPACTION REMINDER === Project: Agent-X v1.3 | Read docs/progress.md for current step | Hard rules: no commit without all tests passing | Never push to main | Next: step 12 hooks'"
+          }
+        ]
+      }
+    ]
+  }
+}

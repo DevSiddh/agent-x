@@ -177,19 +177,24 @@ Priority: POLISH
 
 | Step | Description | Status |
 |------|-------------|--------|
-| Phase 1: webhook | server.py + hmac_validator.py | DONE + TESTED |
-| Phase 1: log_fetcher | cleaner.py | DONE |
-| Phase 1: log_fetcher | fetcher.py | NEEDS REBUILD |
+| Phase 1: webhook | server.py + hmac_validator.py | DONE |
+| Phase 1: log_fetcher | cleaner.py + fetcher.py | DONE |
 | Phase 1: dataset | synthetic.jsonl + schema.py | DONE |
-| Step 0 | Scaffolding + fixtures | PENDING |
-| Step 1 | Spike | PENDING |
-| Step 2 | fetcher.py rebuild | PENDING |
-| Step 3 | Classifier | PENDING |
-| Step 4 | PatchGen | PENDING |
-| Step 5 | Executor | PENDING |
-| Step 6 | Memory Store | PENDING |
-| Step 7 | Pipeline | PENDING |
-| Step 8 | Cleanup | PENDING |
+| Step 0 | Scaffolding + fixtures | DONE |
+| Step 1 | Spike — DeepSeek loop validated | DONE |
+| Step 2 | fetcher.py rebuild | DONE |
+| Step 3 | Classifier (regex + safety gate) | DONE |
+| Step 4 | PatchGen (worker + sanitiser) | DONE |
+| Step 5 | Executor (runner + regression) | DONE |
+| Step 6 | Memory Store | DONE |
+| Step 7 | Pipeline v1 — 5/5 cases | DONE |
+| Step 8 | Cleanup (logging_config + pin reqs) | DONE |
+| Step 9 | v1.1 Context Builder + RAG | DONE |
+| Step 10 | v1.2 Patch quality fix (5/5 accepted) | DONE |
+| Step 11 | v1.3 Thompson Sampling | DONE |
+| Step 12 | Hooks (auto-format + block destructive + compaction) | DONE |
+| Step 13 | .claude/rules/ (Python + tests + docs) | PENDING |
+| Step 14 | CLAUDE.md litmus audit + @imports | PENDING |
 
 ---
 

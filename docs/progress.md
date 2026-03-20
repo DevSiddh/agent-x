@@ -200,6 +200,27 @@ Pipeline results (2026-03-20):
 
 ---
 
+## STEP 12 — Claude Code Hooks (DONE — 2026-03-20)
+| Task | Status | Notes |
+|------|--------|-------|
+| .claude/settings.json (project) | DONE | 3 hooks: PreToolUse + PostToolUse + Notification |
+| ~/.claude/settings.json (global) | DONE | Same hooks merged with existing bypassPermissions |
+| black installed | DONE | v26.3.1 — auto-formats .py on every edit |
+| Destructive block tested | DONE | rm -rf → BLOCKED, pytest → ALLOWED |
+| Full test suite | DONE | 206 passed |
+
+Last test run: 2026-03-20
+```
+206 passed in 30.82s
+```
+
+Hook summary:
+- PreToolUse  : blocks rm -rf, drop table, truncate, reset --hard, push --force
+- PostToolUse : runs black --quiet on every .py file edit (|| true, never blocks)
+- Notification: re-injects project context reminder after every compaction
+
+---
+
 ## STEP 11 — v1.3: Thompson Sampling (DONE — 2026-03-20)
 | Task | Status | Notes |
 |------|--------|-------|
