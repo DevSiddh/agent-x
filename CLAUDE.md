@@ -73,8 +73,8 @@ STEP 4 — Step is complete only when:
 - docs/roadmap.md → exact build order + status tracker
 - context.md → system architecture + folder structure
 
-## Current Build Status (2026-03-20) — v1 COMPLETE + CLEAN
-ALL STEPS DONE — 165 tests passing — memory.jsonl has 5 entries
+## Current Build Status (2026-03-20) — v1.3 COMPLETE
+ALL STEPS DONE — 206 tests passing — memory.jsonl has 51 entries — thompson_state.json active
 
 DONE (all steps, in order):
 - Step 0: requirements.txt + phase2 scaffold + fixtures/syn_001..005  (26 tests)
@@ -143,11 +143,10 @@ pipeline.py ran all 5 synthetic cases. All 5 logged in memory/memory.jsonl.
 
 ## Upgrade Queue
 v1.1 → Context Builder + RAG retrieval          [DONE — Step 9]
-v1.2 → Patch quality fix (syn_002/004/005)       [NEXT — Step 10]
-v1.3 → Thompson Sampling strategy engine         [LOCKED — needs 50+ memory entries]
-        Unlock condition: wc -l memory/memory.jsonl >= 50
-        Reason: Beta(1,1) = random with no data — not useful until real runs accumulate
-v1.4 → Embedding classifier (all-MiniLM-L6-v2)  [after Step 11]
+v1.2 → Patch quality fix (syn_002/004/005)       [DONE — Step 10]
+v1.3 → Thompson Sampling strategy engine         [DONE — Step 11]
+        memory/thompson_state.json written, 2 arms active, learning
+v1.4 → Embedding classifier (all-MiniLM-L6-v2)  [NEXT — Step 12]
 v2.0 → Researcher / Agentic RAG
 v2.1 → Local mode / watchdog observer
 v2.2 → LLM rotation (Qwen → Kimi fallbacks)

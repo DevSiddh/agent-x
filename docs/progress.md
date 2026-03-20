@@ -10,7 +10,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v1 COMPLETE — 2026-03-20
+## Overall Status: v1.3 COMPLETE — 2026-03-20
 
 ---
 
@@ -200,15 +200,25 @@ Pipeline results (2026-03-20):
 
 ---
 
-## STEP 11 — v1.3: Thompson Sampling (LOCKED — needs 50+ memory entries)
+## STEP 11 — v1.3: Thompson Sampling (DONE — 2026-03-20)
 | Task | Status | Notes |
 |------|--------|-------|
-| phase2/strategy/thompson.py | LOCKED | Unlock when memory.jsonl >= 50 lines |
-| Pipeline integration | LOCKED | |
-| tests/test_thompson.py | LOCKED | |
+| phase2/strategy/__init__.py | DONE | empty package |
+| phase2/strategy/thompson.py | DONE | ThompsonSampler, Beta(alpha,beta), save/load, never raises |
+| phase2/pipeline.py | DONE | sample() before DeepSeekWorker, update() after DecisionEngine |
+| tests/test_thompson.py | DONE | 19 passed — arm init, update, sample, persistence, integration |
 
-Reason: Beta(1,1) = uniform random with < 50 runs. No signal to exploit yet.
-Unlock: after Step 10 + real webhook data flowing in.
+Last test run: 2026-03-20
+```
+206 passed in 36.10s
+```
+
+Pipeline run with Thompson active (2026-03-20):
+- thompson.loaded: 2 arms
+- DependencyError arm: alpha=7, beta=1 → score=0.99 (high confidence, many wins)
+- memory/thompson_state.json written successfully
+
+Unlock condition met: memory.jsonl reached 50 lines before building.
 
 ---
 

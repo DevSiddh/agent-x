@@ -1,6 +1,6 @@
 """
 phase2/pipeline.py
-Agent-X v1 — full autonomous repair pipeline.
+Agent-X v1.3 — full autonomous repair pipeline + Thompson Sampling.
 Orchestrates all stages in strict order. try/finally guarantees memory write (P8).
 
 Usage:
@@ -44,6 +44,7 @@ log = structlog.get_logger()
 JSONL_PATH = _REPO_ROOT / "phase1" / "dataset" / "synthetic.jsonl"
 FIXTURES_ROOT = _REPO_ROOT / "fixtures"
 REPO = "synthetic"
+SYNTHETIC_CASES = ["syn_001", "syn_002", "syn_003", "syn_004", "syn_005"]
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,10 @@ def run(case_id: str) -> MemoryEntry:
 
     try/finally guarantees MemoryStore write on every run. (P8)
     """
+    # ThompsonSampler — lazy import inside function (B13 / env var rule)
+    from phase2.strategy.thompson import ThompsonSampler
+    sampler = ThompsonSampler()
+
     run_id = str(uuid.uuid4())[:8]
     start_time = time.monotonic()
     fixture_path = FIXTURES_ROOT / case_id
@@ -127,6 +132,15 @@ def run(case_id: str) -> MemoryEntry:
             log.info("pipeline.observer_mode", case_id=case_id, reason=gate.reason)
             outcome = outcome.model_copy(update={"decision": "abstained"})
             return outcome
+
+        # 4.5 — Thompson Sampling: score this arm before attempting fix
+        exploration_score = sampler.sample(classifier_result.bug_signature)
+        log.info(
+            "thompson.exploration_score",
+            case_id=case_id,
+            bug_signature=classifier_result.bug_signature,
+            exploration_score=round(exploration_score, 4),
+        )
 
         # 5 — ContextBuilder (v1.1 — enriched with RAG)
         _ensure_fixture_repo(fixture_path)
@@ -184,6 +198,12 @@ def run(case_id: str) -> MemoryEntry:
             outcome = outcome.model_copy(update={"decision": "rejected"})
             log.warning("pipeline.rejected", case_id=case_id)
 
+        # 10.5 — Thompson update: feed outcome back to sampler
+        sampler.update(
+            classifier_result.bug_signature,
+            accepted=(outcome.decision == "accepted"),
+        )
+
         # Rollback fixture so it stays clean for re-runs
         rollback(fixture_path)
 
@@ -223,7 +243,7 @@ def run(case_id: str) -> MemoryEntry:
 
 def run_all_synthetic() -> list[MemoryEntry]:
     """Run the full pipeline on all 5 synthetic cases and print a summary."""
-    case_ids = ["syn_001", "syn_002", "syn_003", "syn_004", "syn_005"]
+    case_ids = SYNTHETIC_CASES
     results: list[MemoryEntry] = []
 
     print("\n" + "=" * 70)
