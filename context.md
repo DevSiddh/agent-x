@@ -49,19 +49,20 @@ bug_signature format: repo:ErrorType:keyword:affected_file
   "decision", "success_count", "fail_count", "error"
 }
 
-## Folder Structure (v1)
+## Folder Structure — v1 COMPLETE + CLEAN (2026-03-20 | 165 tests)
 agent-x/
-├── phase1/webhook/         server.py, hmac_validator.py       [DONE]
-├── phase1/log_fetcher/     fetcher.py (needs rebuild), cleaner.py
+├── phase1/webhook/         server.py, hmac_validator.py       [DONE — 15 tests]
+├── phase1/log_fetcher/     fetcher.py, cleaner.py             [DONE — 13 tests]
 ├── phase1/dataset/         synthetic.jsonl, schema.py         [DONE]
-├── phase2/classifier/      regex_pass.py, safety_gate.py
-├── phase2/patch_gen/       worker.py, sanitiser.py
-├── phase2/executor/        runner.py, regression.py
-├── phase2/memory/          store.py
-├── phase2/pipeline.py
-├── fixtures/               syn_001..005/ (real git repos)
-├── spike/                  run_spike.py (throwaway validator)
-├── memory/memory.jsonl
+├── phase2/classifier/      regex_pass.py, safety_gate.py      [DONE — 33 tests]
+├── phase2/patch_gen/       worker.py, sanitiser.py            [DONE — 19 tests]
+├── phase2/executor/        runner.py, regression.py           [DONE — 18 tests]
+├── phase2/memory/          store.py                           [DONE — 17 tests]
+├── phase2/logging_config.py                                   [DONE — Step 8]
+├── phase2/pipeline.py                                         [DONE — 7 tests]
+├── fixtures/               syn_001..005/ (real git repos)     [DONE — 26 tests]
+├── spike/                  run_spike.py (throwaway validator)  [DONE]
+├── memory/memory.jsonl     5 entries from live pipeline run
 ├── tests/
 ├── docs/roadmap.md         ← full build plan
 ├── docs/problems_and_solutions.md  ← all bugs + fixes

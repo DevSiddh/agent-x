@@ -73,25 +73,21 @@ STEP 4 — Step is complete only when:
 - docs/roadmap.md → exact build order + status tracker
 - context.md → system architecture + folder structure
 
-## Current Build Status (2026-03-20)
-DONE:
-- phase1/webhook/server.py          FastAPI + SQLite queue + HMAC (15 tests pass)
-- phase1/webhook/hmac_validator.py  async validate(request) → bool
-- phase1/log_fetcher/cleaner.py     clean + extract_error_window
-- phase1/dataset/synthetic.jsonl    5 cases (syn_001..005)
-- phase1/dataset/schema.py          validation
-- tests/test_phase1.py              phase 1 schema + cleaner tests
-- tests/test_webhook.py             15 tests, all pass
+## Current Build Status (2026-03-20) — v1 COMPLETE + CLEAN
+ALL STEPS DONE — 165 tests passing — memory.jsonl has 5 entries
 
-NEXT (in strict order per docs/roadmap.md):
-1. Step 0: requirements.txt + phase2 scaffold + fixtures/syn_001..005
-2. Step 1: spike/run_spike.py (validate DeepSeek → patch → apply loop)
-3. Step 2: fetcher.py rebuild (P4 lazy token, P9 zip sort, P14 structlog)
-4. Step 3: phase2/classifier/
-5. Step 4: phase2/patch_gen/
-6. Step 5: phase2/executor/
-7. Step 6: phase2/memory/
-8. Step 7: phase2/pipeline.py (v1 done when 5 synthetic cases logged)
+DONE (all steps, in order):
+- Step 0: requirements.txt + phase2 scaffold + fixtures/syn_001..005  (26 tests)
+- Step 1: spike/run_spike.py — DeepSeek loop validated end-to-end
+- Step 2: phase1/log_fetcher/fetcher.py rebuild (lazy token, sorted ZIP, structlog)
+- Step 3: phase2/classifier/ — regex_pass.py + safety_gate.py         (33 tests)
+- Step 4: phase2/patch_gen/ — worker.py + sanitiser.py                (19 tests)
+- Step 5: phase2/executor/ — runner.py + regression.py                (18 tests)
+- Step 6: phase2/memory/store.py                                       (17 tests)
+- Step 7: phase2/pipeline.py — all 5 cases logged in memory.jsonl     (7 tests)
+- Step 8: phase2/logging_config.py + pinned requirements.txt           (165 total)
+
+NEXT PHASE: v1.1 — see Upgrade Queue below
 
 ## Pipeline (strict order)
 Observer → LogParser → RegexClassifier → PreSafetyGate
@@ -141,14 +137,14 @@ subprocess.run(["pytest", "tests/", "--tb=short", "--json-report"], cwd=fixture_
 6. Memory dedup = check (repo + bug_signature) before every write
 7. Regression = pytest-json-report before/after diff
 
-## v1 Done When
-pipeline.py runs end-to-end on 5 synthetic cases.
-All 5 logged in memory/memory.jsonl. That is v1 complete.
+## v1 Done — SHIPPED 2026-03-20
+pipeline.py ran all 5 synthetic cases. All 5 logged in memory/memory.jsonl.
+165 tests passing. requirements.txt fully pinned. Structlog unified.
 
-## Upgrade Queue (locked until v1 ships)
-v1.1 → Context Builder + RAG retrieval
-v1.2 → Thompson Sampling strategy engine
-v1.3 → Embedding classifier (all-MiniLM-L6-v2)
+## Upgrade Queue (v1 SHIPPED — UNLOCKED)
+v1.1 → Context Builder + RAG retrieval (3 similar past fixes in prompt)
+v1.2 → Thompson Sampling strategy engine (exploit vs explore)
+v1.3 → Embedding classifier (all-MiniLM-L6-v2, replaces regex)
 v2.0 → Researcher / Agentic RAG
 v2.1 → Local mode / watchdog observer
 v2.2 → LLM rotation (Qwen → Kimi fallbacks)

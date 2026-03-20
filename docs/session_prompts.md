@@ -1,7 +1,11 @@
 # Agent-X | Session Prompts
-# Usage: Open Claude Code → paste the prompt for the step you want → done
+# Usage: Open Claude Code → say "step N" → Claude executes that step fully
 # Each prompt is self-contained. Claude needs nothing else.
 # Last updated: 2026-03-20
+#
+# STATUS: v1 COMPLETE + CLEAN — 2026-03-20
+# Steps 0–8 DONE. 165 tests passing. memory.jsonl has 5 entries.
+# Next: say "step 9" to start v1.1 (Context Builder + RAG retrieval)
 
 ---
 
@@ -363,4 +367,73 @@ DONE WHEN:
 - pytest tests/ → all pass, zero failures
 - No stdlib logging anywhere
 - requirements.txt fully pinned
+```
+
+---
+
+## STEP 9 — v1.1: Context Builder + RAG Retrieval
+
+```
+You are building Agent-X v1.1 — Context Builder upgrade.
+Read CLAUDE.md, docs/progress.md, docs/problems_and_solutions.md before touching anything.
+v1 is COMPLETE. 165 tests pass. Do not break existing tests.
+
+BUILD THIS STEP:
+
+1. phase2/context_builder.py
+   - build_context(classifier_result: ClassifierResult, fixture_path: Path) -> str
+   - Reads affected file content from fixture (already done in pipeline._build_context — promote to module)
+   - Calls get_similar(bug_signature, limit=3) from memory store
+   - Formats: file content + 3 past similar fixes (patch + decision) + error summary
+   - Returns single context string passed to DeepSeekWorker
+   - structlog logging, type hints, Pydantic-safe, __main__ smoke test
+
+2. Update phase2/pipeline.py
+   - Replace inline _build_context() + get_similar() call with context_builder.build_context()
+   - No other pipeline changes
+
+3. tests/test_context_builder.py
+   - Test context includes file content
+   - Test context includes similar past fixes when memory has them
+   - Test context works when memory is empty
+   - Test context works when affected file missing
+
+DONE WHEN:
+- pytest tests/ → all pass (165+ tests)
+- context_builder.build_context() returns richer context than v1
+- docs/progress.md updated: STEP 9 DONE — v1.1
+```
+
+---
+
+## STEP 10 — v1.2: Thompson Sampling Strategy Engine
+
+```
+You are building Agent-X v1.2 — Thompson Sampling strategy engine.
+Read CLAUDE.md, docs/progress.md, docs/problems_and_solutions.md before touching anything.
+v1.1 must be DONE before starting this step.
+
+BUILD THIS STEP:
+
+1. phase2/strategy/thompson.py
+   - ThompsonSampler: tracks (alpha, beta) per bug_signature
+   - sample(bug_signature: str) -> float  → sample from Beta(alpha, beta)
+   - update(bug_signature: str, accepted: bool) → update alpha/beta
+   - Persists state to memory/thompson_state.json
+   - __main__ smoke test
+
+2. Update phase2/pipeline.py
+   - After DecisionEngine: call sampler.update(bug_signature, accepted=(decision=="accepted"))
+   - Before DeepSeekWorker: log sampler.sample(bug_signature) as exploration_score
+
+3. tests/test_thompson.py
+   - Test alpha/beta update on accept
+   - Test alpha/beta update on reject
+   - Test persistence to JSON
+   - Test sample returns float in [0, 1]
+
+DONE WHEN:
+- pytest tests/ → all pass
+- Thompson state persists across runs
+- docs/progress.md updated: STEP 10 DONE — v1.2
 ```
