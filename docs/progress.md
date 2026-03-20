@@ -91,12 +91,12 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 3 — Classifier (PENDING)
+## STEP 3 — Classifier (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase2/classifier/regex_pass.py | PENDING | — | |
-| phase2/classifier/safety_gate.py | PENDING | — | |
-| tests/test_classifier.py | PENDING | — | |
+| phase2/classifier/regex_pass.py | DONE | PASS | all 5 cases correct, conf=0.99 |
+| phase2/classifier/safety_gate.py | DONE | PASS | repair/observer modes |
+| tests/test_classifier.py | DONE | 33 passed | |
 
 ---
 
