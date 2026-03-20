@@ -156,7 +156,23 @@ Last test run: 2026-03-20
 165 passed in 33.85s
 ```
 
-## v1 COMPLETE + CLEAN — 2026-03-20
+---
+
+## STEP 9 — v1.1: Context Builder + RAG (DONE — 2026-03-20)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/context_builder.py | DONE | PASS | build_context(), 3-section prompt, RAG from memory |
+| phase2/pipeline.py | DONE | PASS | wired to build_context(), _build_context() removed |
+| tests/test_context_builder.py | DONE | 15 passed | file content, RAG hits, empty memory, missing file |
+
+Last test run: 2026-03-20
+```
+180 passed in 32.56s
+```
+
+---
+
+## v1.1 COMPLETE — 2026-03-20
 
 ---
 

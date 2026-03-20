@@ -26,6 +26,7 @@ if str(_REPO_ROOT) not in sys.path:
 # Load .env so DEEPSEEK_API_KEY is available when running directly
 load_dotenv(_REPO_ROOT / ".env")
 
+from phase2.context_builder import build_context
 from phase2.logging_config import configure_logging
 configure_logging()
 
@@ -58,20 +59,6 @@ def _load_case(case_id: str) -> dict:
                     return case
     raise ValueError(f"Case {case_id!r} not found in synthetic.jsonl")
 
-
-def _build_context(classifier_result: ClassifierResult, fixture_path: Path) -> str:
-    """
-    ContextBuilder — read affected file content from fixture.
-    Spike proved LLM cannot patch blind — file content is required.
-    """
-    affected = classifier_result.affected_file
-    file_path = fixture_path / affected
-
-    if file_path.exists():
-        return file_path.read_text()
-
-    log.warning("pipeline.context_file_missing", file=affected)
-    return f"# File not found: {affected}"
 
 
 def _ensure_fixture_repo(fixture_path: Path) -> None:
@@ -141,10 +128,10 @@ def run(case_id: str) -> MemoryEntry:
             outcome = outcome.model_copy(update={"decision": "abstained"})
             return outcome
 
-        # 5 — ContextBuilder
+        # 5 — ContextBuilder (v1.1 — enriched with RAG)
         _ensure_fixture_repo(fixture_path)
         rollback(fixture_path)  # ensure clean state
-        context = _build_context(classifier_result, fixture_path)
+        context = build_context(classifier_result, fixture_path, error_lines=cleaned)
 
         # 6 — Run tests BEFORE patch (regression baseline)
         before: TestReport = run_tests(fixture_path)
