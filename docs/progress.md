@@ -109,12 +109,12 @@ Key finding: must include affected file content in prompt — LLM cannot patch b
 
 ---
 
-## STEP 5 — Executor (PENDING)
+## STEP 5 — Executor (DONE)
 | File | Status | Tests | Notes |
 |------|--------|-------|-------|
-| phase2/executor/runner.py | PENDING | — | subprocess, git apply |
-| phase2/executor/regression.py | PENDING | — | before/after pytest-json-report |
-| tests/test_executor.py | PENDING | — | |
+| phase2/executor/runner.py | DONE | PASS | subprocess git apply, rollback, P1 P16 |
+| phase2/executor/regression.py | DONE | PASS | pytest-json-report, P7 |
+| tests/test_executor.py | DONE | 18 passed | real git apply, real pytest |
 
 ---
 
