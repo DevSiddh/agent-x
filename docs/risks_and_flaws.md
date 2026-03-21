@@ -171,6 +171,54 @@
 
 ---
 
+## SCALING CLIFFS (what breaks when files get huge)
+
+---
+
+### S1 — memory.jsonl TF-IDF gets slow
+- **When:** ~10,000 entries (currently 340)
+- **Symptom:** similarity search takes seconds → pipeline unusable
+- **Fix:** Switch to FAISS vector index
+  ```python
+  # faiss.IndexFlatL2 — searches 1M entries in milliseconds
+  # drop-in replacement for current TF-IDF in similarity.py
+  ```
+- **Gate:** Build when memory.jsonl exceeds 10,000 entries
+
+---
+
+### S2 — Context window hits ceiling
+- **When:** 7+ RAG hits with full content + file tree + error log → 8,000+ tokens
+- **Current:** 5 RAG hits ~500 tokens — fine
+- **Fix:** Ranked verbosity (Gemini validated)
+  ```
+  Match #1 → full file content + diff
+  Match #2-7 → diff + bug_signature only
+  ```
+- **Gate:** Build when RAG limit raised above 7 (after 200+ accepted runs)
+
+---
+
+### S3 — Git history bloats from memory.jsonl commits
+- **When:** ~5,000+ commits with memory.jsonl growing each time
+- **Symptom:** git clone becomes slow, repo size balloons
+- **Fix:** Stop committing memory.jsonl to git
+  Move to SQLite (same pattern as phase1/webhook/queue.db)
+  Git tracks code only — never runtime data
+- **Gate:** Build when memory.jsonl exceeds 5MB or 5,000 entries
+
+---
+
+### Timeline (nothing urgent yet)
+
+| Problem | Starts at | Currently | Time to hit |
+|---------|-----------|-----------|-------------|
+| TF-IDF slow | 10,000 entries | 340 | months |
+| Context ceiling | 15 RAG hits | 5 | far future |
+| Git bloat | 5,000 commits | ~30 | far future |
+
+---
+
 ## SOLUTION PRIORITY
 
 | Risk | Priority | When to fix |
