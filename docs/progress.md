@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v2.1.5 COMPLETE — 2026-03-22 — All Steps B0–B3 + C0–C2 DONE. Next: C3 (multi-language)
+## Overall Status: v2.1.6 IN PROGRESS — 2026-03-22 — C3 DONE. Next: C3b (multi-language classifier)
 
 ---
 
@@ -480,6 +480,24 @@ Last test run: 2026-03-22
 ```
 304 passed, 2 warnings in 75.41s
 ```
+
+---
+
+## Step C3 — Multi-Language Executor (DONE — 2026-03-22)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/executor/runner.py | DONE | PASS | get_runner() — extension → command map |
+| phase2/executor/regression.py | DONE | PASS | parse_report() Jest+pytest, run_tests(affected_file) |
+| fixtures/syn_js_001/ | DONE | — | app.js (buggy), app.test.js, package.json |
+| tests/test_multilang_executor.py | DONE | 12 passed | runner selection, report parsing, JS fixture |
+
+Last test run: 2026-03-22
+```
+323 passed, 3 warnings in 105.72s
+```
+
+Runner map: .py→pytest .js→jest .ts→vitest .php→phpunit .java→mvn — fallback pytest for unknown.
+JS fixture test skips gracefully if Node not installed.
 
 ---
 

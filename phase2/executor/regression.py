@@ -24,53 +24,87 @@ class TestReport(BaseModel):
     note: str = ""   # "flaky" when run_tests_stable detects intermittent failures (C1)
 
 
-def run_tests(fixture_path: Path) -> TestReport:
+def parse_report(report_path: Path, runner: str) -> tuple[list[str], int]:
     """
-    Run pytest on a fixture repo and return structured results.
+    Parse a test report file into (failed_test_ids, total_count).
+    Handles both pytest-json-report and Jest JSON formats.
 
     Args:
-        fixture_path: Path to the fixture git repo.
+        report_path: Path to the JSON report file.
+        runner:      Runner name (e.g. "pytest", "jest", "npx").
+
+    Returns:
+        Tuple of (failed_test_names, total_count).
+    """
+    if not report_path.exists():
+        return [], 0
+
+    try:
+        data = json.loads(report_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return [], 0
+
+    failed: list[str] = []
+    total = 0
+
+    # Jest JSON format: {"testResults": [...], "numTotalTests": N, "numFailedTests": N}
+    if "testResults" in data:
+        total = data.get("numTotalTests", 0)
+        for suite in data.get("testResults", []):
+            for test in suite.get("testResults", []):
+                if test.get("status") == "failed":
+                    failed.append(test.get("fullName") or test.get("title", "unknown"))
+
+    # pytest-json-report format: {"summary": {...}, "tests": [...]}
+    elif "tests" in data:
+        total = data.get("summary", {}).get("total", 0)
+        for test in data["tests"]:
+            if test.get("outcome") == "failed":
+                failed.append(test.get("nodeid", "unknown"))
+
+    return failed, total
+
+
+def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
+    """
+    Run the appropriate test suite on a fixture repo and return structured results.
+    Detects runner from affected_file extension (C3). Falls back to pytest.
+
+    Args:
+        fixture_path:  Path to the fixture git repo.
+        affected_file: File that was patched — used to select correct test runner.
 
     Returns:
         TestReport with passed, failed_tests, total, exit_code, raw output.
     """
+    from phase2.executor.runner import get_runner
+
     fixture_path = Path(fixture_path).resolve()
     report_file = fixture_path / "report.json"
+    cmd = get_runner(affected_file)
+
+    # Inject report file path for runners that support it
+    cmd_with_report = [
+        arg.replace("report.json", str(report_file)) for arg in cmd
+    ]
 
     result = subprocess.run(
-        [
-            sys.executable, "-m", "pytest",
-            "tests/",
-            "--tb=short",
-            "--json-report",
-            f"--json-report-file={report_file}",
-            "-q",
-        ],
+        cmd_with_report,
         cwd=fixture_path,
         capture_output=True,
         text=True,
     )
 
-    failed_tests: list[str] = []
-    total = 0
-
-    if report_file.exists():
-        try:
-            report_data = json.loads(report_file.read_text())
-            total = report_data.get("summary", {}).get("total", 0)
-            for test in report_data.get("tests", []):
-                if test.get("outcome") == "failed":
-                    failed_tests.append(test.get("nodeid", "unknown"))
-        except (json.JSONDecodeError, KeyError):
-            pass
-        finally:
-            report_file.unlink(missing_ok=True)
+    runner_name = cmd[0].split("/")[-1].split("\\")[-1]
+    failed_tests, total = parse_report(report_file, runner_name)
+    report_file.unlink(missing_ok=True)
 
     passed = result.returncode == 0
 
     log.info(
         "regression.test_run",
         fixture=str(fixture_path),
+        runner=runner_name,
         passed=passed,
         failed=len(failed_tests),
         total=total,

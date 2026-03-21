@@ -15,6 +15,36 @@ from pydantic import BaseModel
 
 log = structlog.get_logger()
 
+# ---------------------------------------------------------------------------
+# Runner map — file extension → test command (C3)
+# ---------------------------------------------------------------------------
+
+_RUNNER_MAP: dict[str, list[str]] = {
+    ".py":   [sys.executable, "-m", "pytest", "tests/", "--tb=short",
+              "--json-report", "--json-report-file=report.json", "-q"],
+    ".js":   ["npx", "jest", "--json", "--outputFile=report.json"],
+    ".ts":   ["npx", "vitest", "run", "--reporter=json"],
+    ".php":  ["phpunit", "--log-json", "report.json"],
+    ".java": ["mvn", "test"],
+}
+
+
+def get_runner(affected_file: str) -> list[str]:
+    """
+    Return the correct test runner command for the given file extension.
+    Falls back to pytest for unrecognised extensions.
+
+    Args:
+        affected_file: Path or filename with extension (e.g. 'app.js', 'main.py').
+
+    Returns:
+        Command list suitable for subprocess.run().
+    """
+    suffix = Path(affected_file).suffix.lower()
+    cmd = _RUNNER_MAP.get(suffix, _RUNNER_MAP[".py"])
+    log.info("executor.runner", lang=suffix or ".py", cmd=cmd[0])
+    return cmd
+
 
 class ApplyResult(BaseModel):
     success: bool
