@@ -302,11 +302,45 @@ The only difference is the entry point and where git apply runs.
 Interruptible loop (v4.x):
 `/pause` `/approve` `/abort` `/change_strategy` — human controls live loop.
 
+## Interpreter Layer (builds across v2.2 → v3.0)
+
+Four interpreters ranked by value to the vision:
+
+```
+#3 — Patch Interpreter (D1 — CRITICAL for auto-PR)
+     Before applying: plain-English explanation of what the patch does and why
+     "Adds setuptools to requirements.txt — pip failed importing pkg_resources"
+     → Human reads PR and understands what they're approving
+     → Without this, auto-PR is a black box nobody trusts
+
+#2 — Log Interpreter (D0 — HIGH value)
+     After classification: plain-English root cause explanation
+     Instead of: "DependencyError, confidence 0.99"
+     Output: "pip failed at line 47 — setuptools missing due to build isolation"
+     → Agent-Y gets richer context → better strategy → better patch
+
+#4 — Result Interpreter (v3.0 — MEDIUM value)
+     After fix: explains why the patch worked, what memory entries matched,
+     what Thompson arm was chosen and why
+     → Human understands autonomous decisions
+     → Feeds post-merge awareness (L6 in risks_and_flaws.md)
+
+#1 — Code Interpreter (v3.3 — LOW priority now)
+     Run arbitrary code in sandbox
+     LOCKED until Docker executor — security risk without sandboxing
+```
+
+Build order: Patch (#3) at D1 → Log (#2) at D0 → Result (#4) at v3.0 → Code (#1) at v3.3
+
+---
+
 ## Roadmap to Vision
 
 ```
-v2.1  → Real webhook repair        (CURRENT — Step B0 READY)
-v2.2  → Auto-PR                    (gate: 20+ real accepted fixes)
+v2.1  → Real webhook repair        (DONE — 101+ accepted)
+v2.2  → Context tools + auto-PR    (NEXT)
+         D0: file tree + GitHub file fetch + log interpreter (#2)
+         D1: auto-PR + patch interpreter (#3)
 v2.3  → Multi-repo support
 ─────────────────────────────────────────────────────────────────
 v3.0  → Orchestrator + shared state + Plan/Task loop
@@ -315,12 +349,13 @@ v3.0  → Orchestrator + shared state + Plan/Task loop
          Step C2: Agent-Y planner output (PLAN/NEXT_TASK/REPLAN schema)
          Step C3: wire Agent-X into task execution
          Step C4: failure classification + REPLAN trigger
+         + Result interpreter (#4)
          GATE: loop runs 10 iterations without collapse before C5
-v3.1  → Project memory + design intelligence (Agent-Y reads chatgpt_reviews.md)
+v3.1  → Project memory + design intelligence
          + Executor interface abstraction (LocalExecutor/DockerExecutor/VPSExecutor)
-v3.2  → Interface layer: Control API + Telegram bot + CLI tool
-v3.3  → DockerExecutor + VPSExecutor backends
-v4.0  → Fine-tune local model on prompt stack
+v3.2  → Interface layer: Control API + Telegram bot + CLI tool + local log watcher
+v3.3  → DockerExecutor + VPSExecutor backends + Code interpreter (#1)
+v4.0  → Fine-tune local model on memory.jsonl (LoRA, gate: 500+ accepted runs)
 v4.1  → Idea in → working repo out (interruptible, phone-controllable)
 ```
 
