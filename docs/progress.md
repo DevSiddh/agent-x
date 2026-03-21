@@ -1,16 +1,22 @@
 # Agent-X | Progress Tracker
 # AUTO-UPDATED by Claude after every completed step + passing tests
-# Last updated: 2026-03-20
+# Last updated: 2026-03-22
 # Rule: Claude MUST update this file after every step before moving to next
 
 ---
+
+## North Star (never lose this)
+Autonomous software engineer. Agent-Y (brain) + Agent-X (hands) in a feedback loop.
+User gives idea → system thinks, designs, builds, tests, fixes, learns.
+CI/CD repair is the proving ground — not the destination.
+Full vision → @docs/vision.md
 
 ## v1 Goal
 pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v1.3 COMPLETE — 2026-03-20
+## Overall Status: v2.1.5 IN PROGRESS — 2026-03-22 — Steps B0+B1+B2+B3+C0+C1 DONE. C2 READY (gates unlocked)
 
 ---
 
@@ -273,6 +279,259 @@ Pipeline run with Thompson active (2026-03-20):
 - memory/thompson_state.json written successfully
 
 Unlock condition met: memory.jsonl reached 50 lines before building.
+
+---
+
+## Agent-Y v1 — COMPLETE (2026-03-20)
+
+| Step | File | Status | Tests | Notes |
+|------|------|--------|-------|-------|
+| A0 | spike/run_spike_y.py | DONE | SPIKE PASS 3/3 | DependencyError, ConfigError, RuntimeError — all JSON valid |
+| A1 | agent_y/reasoner.py | DONE | 27 passed | ReasonerOutput, validate_strategy, _filter_files, _extract_json |
+| A2 | phase2/pipeline.py | DONE | 206 passed | Reasoner at step 5.5, ReasonerError fallback to raw context |
+| A3 | — | DONE | — | Audit GREEN — zero critical issues |
+| A4 | — | PENDING | — | Trigger: sensitive code or DeepSeek bill >$30/mo |
+
+Pipeline with Agent-Y (step 5.5):
+ContextBuilder → Reasoner (deepseek-reasoner) → DeepSeekWorker (deepseek-chat)
+
+Last test run: 2026-03-20
+```
+206 passed in 37.51s
+```
+
+---
+
+## v2.1.5 — Memory Engine + Pipeline Hardening (IN PROGRESS — C0+C1 DONE)
+
+### v2.1.5 Done Condition
+Memory reuse bypass active. Repeated bugs fixed at zero LLM cost. Flaky fixes never reach memory. Bandit rejects unsafe patches. Structural bugs labelled correctly.
+
+### v2.1.5 Status Tracker
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step C0 | TF-IDF similarity + hybrid ranking + memory reuse bypass + test_summary | DONE — 2026-03-21 |
+| Step C1 | Multi-run verification + Bandit security gate + structural escalation label | DONE — 2026-03-21 |
+| Step C2 | Gateway stage — regex direct fixes (data-gated) | PENDING |
+
+### What these steps add
+| Upgrade | Solves |
+|---------|--------|
+| TF-IDF similarity engine | RAG matches by real similarity, not just category |
+| Hybrid ranking (sim × Thompson) | Picks most likely to succeed, not just most similar |
+| Memory reuse bypass | Skip Agent-Y+X entirely for known bugs — zero LLM cost |
+| test_summary in MemoryEntry | Enables weak-success filtering |
+| Multi-run verification (3x) | Prevents flaky fixes poisoning memory |
+| Bandit security scan | Rejects patches that pass tests but are unsafe |
+| Structural escalation label | Correctly identifies architecture-level bugs, stops cleanly |
+| Gateway stage | Zero-cost tier for trivial known patterns |
+
+---
+
+## v2.2 Tools — Context Tools for Agent-Y/X (PENDING — after C2)
+
+### v2.2 Tools Done Condition
+Agent-Y gets file tree + web docs + PDF summary before planning. Agent-X gets GitHub examples. ContextBuilder uses all 4 tools.
+
+### v2.2 Tools Status Tracker
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step D0 | File tree reader + Web reader + GitHub search + PDF summarizer (NotebookLM-style) | PENDING |
+
+### What these tools add
+| Tool | What it gives | Who uses it |
+|---|---|---|
+| File tree reader | Full project layout — prevents file collisions | Agent-Y |
+| Web reader | Current API docs — fixes outdated LLM knowledge | Agent-Y |
+| GitHub code search | Real-world fix examples for obscure errors | Agent-X |
+| PDF summarizer | Structured API/SDK understanding from uploaded docs | Agent-Y |
+
+---
+
+## v2.1.6 — Multi-Language Full Stack (PENDING — after C2)
+
+### v2.1.6 Done Condition
+Executor runs correct test runner per language. Classifier recognises JS/PHP/Java/SQL errors. Log cleaner handles all stack trace formats. Visual regressions caught by Playwright.
+
+### v2.1.6 Status Tracker
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step C3 | Multi-language executor — jest/vitest/phpunit/junit per file extension | PENDING |
+| Step C3b | Multi-language classifier + log cleaner patterns (JS/PHP/Java/SQL) | PENDING |
+| Step C4 | Playwright visual validation — gated by file extension | PENDING |
+
+### What these steps add
+| Upgrade | Solves |
+|---------|--------|
+| get_runner() by extension | Correct test runner per language |
+| JS/PHP/Java/SQL classifier patterns | Non-Python errors correctly classified |
+| Multi-format log cleaner | Node.js/PHP/Java stack traces handled |
+| Playwright visual check | System no longer blind to UI regressions |
+| Radon complexity check (in C1) | Catches architecture risk, not just line count |
+| pytesseract OCR (v3.2) | Screenshots/images → text, no second LLM needed |
+
+---
+
+### v2.1.6 Done Condition
+Executor runs correct test runner per language. JS/PHP/SQL fixes validated. Visual regressions caught by Playwright before accepting frontend fixes.
+
+### v2.1.6 Status Tracker
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step C3 | Multi-language executor — jest/vitest/phpunit/junit per file extension | PENDING |
+| Step C4 | Visual validation — Playwright + pixelmatch, gated by file extension | PENDING |
+
+### What these steps add
+| Upgrade | Solves |
+|---------|--------|
+| Multi-language executor | MERN, JS, PHP, SQL, MongoDB, all non-Python stacks unlocked |
+| get_runner() by extension | Correct test runner auto-detected per language |
+| Playwright visual check | System no longer blind to UI regressions |
+| Extension gating | Visual check only on .css/.tsx/.jsx/.html — logic files unaffected |
+
+---
+
+## v2.1 — Real GitHub Webhook Integration (COMPLETE — 2026-03-21)
+
+### v2.1 Done Condition
+Real GitHub repo CI fails → webhook fires → log fetched → pipeline runs → MemoryEntry written with real repo + real run_id.
+
+### v2.1 Status Tracker
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step B0 | Spike — real CI log flow validated | DONE — 2026-03-21 |
+| Step B1 | phase3/log_cleaner_real.py + tests | DONE — 2026-03-21 |
+| Step B2 | phase3/webhook_worker.py + dedup + fetch | DONE — 2026-03-21 |
+| Step B3 | Integration + runner + end-to-end | DONE — 2026-03-21 |
+
+### Dev Environment — FULLY SET UP (2026-03-20)
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Test repo | DONE | github.com/DevSiddh/-agent-x-test-repo |
+| CI workflow | DONE | .github/workflows/ci.yml — fails on missing module import |
+| Webhook server | DONE | python -m uvicorn phase1.webhook.server:app --port 8000 --env-file .env |
+| ngrok tunnel | DONE | nonlogical-unfoaled-omari.ngrok-free.dev (free tier, changes on restart) |
+| GitHub webhook | DONE | Workflow runs only, SSL disabled, secret=testsecret123 |
+| .env | DONE | GITHUB_TOKEN, GITHUB_WEBHOOK_SECRET, DEEPSEEK_API_KEY all set |
+| Live event queued | DONE | run_id=23347391009, repo=DevSiddh/-agent-x-test-repo, row_id=1 |
+
+### New Files (phase3/)
+| File | Purpose | Status |
+|------|---------|--------|
+| phase3/__init__.py | empty package | PENDING |
+| phase3/log_cleaner_real.py | ANSI strip, timestamp removal, failure window extract | PENDING |
+| phase3/webhook_worker.py | dequeue → filter → dedup → fetch → clean → classify → pipeline | PENDING |
+| phase3/runner.py | poll loop, structlog every run | PENDING |
+| spike/run_spike_real.py | validate real log flow end-to-end | PENDING |
+
+### Key Decisions (locked)
+1. phase3/ = entry layer only — never modify phase1/ or phase2/ internals
+2. Dedup key = (repo, run_id, run_attempt) — stored in SQLite
+3. Filter = workflow_run + conclusion=failure ONLY
+4. Log cap = 200KB — take last 200KB (failure near end)
+5. run_attempt from webhook payload — always latest
+6. confidence < 0.85 on real log → UNKNOWN → observer mode (no guessing)
+7. Auto-PR locked until 20+ real accepted fixes confirmed
+
+### Docs created for v2.1
+- phase3/context.md — architecture index (80 lines)
+- phase3/CLAUDE.md — 10 hard rules for webhook integration
+- docs/v21_problems.md — P1-P7 with concrete solutions + P17 P18 P19 (setup bugs)
+- docs/v21_roadmap.md — Steps B0-B3
+- docs/session_prompts.md — Steps B0 B1 B2 B3 added
+
+### Setup Bugs Discovered + Fixed This Session
+| Bug | Fix |
+|-----|-----|
+| P17 | uvicorn not on PATH → use python -m uvicorn |
+| P18 | .env not loaded → always use --env-file .env flag |
+| P19 | YAML on: reserved word → use block style not inline |
+
+---
+
+## Live Testing Session — Classifier + Cleaner Fixes (DONE — 2026-03-22)
+
+All 4 patchable categories confirmed working on real GitHub CI logs.
+
+| Fix | File | What changed |
+|-----|------|-------------|
+| AssertionError weight 0.60 → 0.90 | phase2/classifier/regex_pass.py | Single match now sufficient to pass 0.85 gate |
+| `extract_failure_window` n=20 → 40, 75/25 bias | phase3/log_cleaner_real.py | Captures Python traceback before "Process completed" runner line |
+| run_l2 test case fixed | test_repo_cases/cases/run_l2/main.py | Explicit raise ensures CI exit code 1; pydantic 2.9.2 was silently passing |
+
+Live results (real GitHub webhook runs):
+
+| Case | Category | Confidence | Decision |
+|------|----------|-----------|---------|
+| dep_l1 | DependencyError | 0.99 | accepted |
+| env_l1 | EnvironmentError | 0.90 | accepted |
+| cfg_l2 | ConfigError | 0.99 | accepted |
+| run_l1 | RuntimeError | 0.90 | accepted |
+| run_l2 | RuntimeError | 0.99 | accepted |
+
+Memory stats: 101+ accepted — C2 gate (≥3 same sig) UNLOCKED — v2.2 gate (20+ accepted) UNLOCKED
+
+Last test run: 2026-03-22
+```
+304 passed, 2 warnings in 75.41s
+```
+
+---
+
+## Step C2 — Gateway Stage (READY — data gates met)
+| Gate | Requirement | Status |
+|------|-------------|--------|
+| Same bug_signature ≥ 3x | C2 gate | UNLOCKED (28x top sig) |
+| 20+ accepted total | v2.2 gate | UNLOCKED (101+ accepted) |
+
+Say "step C2" to build.
+
+---
+
+## Step C1 — Pipeline Hardening (DONE — 2026-03-21)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/executor/regression.py | DONE | PASS | run_tests_stable(), note="flaky" field |
+| phase2/pipeline.py | DONE | PASS | Bandit gate, Radon gate, structural escalation, run_tests_stable wired |
+| tests/test_hardening.py | DONE | 10 passed | flaky detection, bandit gate, structural escalation |
+
+Last test run: 2026-03-21
+```
+304 passed, 2 warnings in 298.58s
+```
+
+---
+
+## Step C0 — Memory Engine (DONE — 2026-03-21)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/memory/store.py | DONE | PASS | test_summary field added |
+| phase2/memory/similarity.py | DONE | PASS | MemoryEngine, TF-IDF + hybrid ranking, threshold=0.85 |
+| phase2/pipeline.py | DONE | PASS | Memory reuse bypass wired (4.5 stage), test_summary populated |
+| tests/test_similarity.py | DONE | 11 passed | find_similar, hybrid ranking, reuse bypass integration |
+
+Last test run: 2026-03-21
+```
+294 passed, 1 warning in 284.97s
+```
+
+---
+
+## Step B3 — v2.1 Integration + Runner (DONE — 2026-03-21)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase3/runner.py | DONE | PASS | poll_and_process(), KeyboardInterrupt clean exit, structlog |
+| tests/test_v21_integration.py | DONE | 9 passed | queue→memory, dedup, non-failure filter, observer mode, queue row marked done |
+
+Last test run: 2026-03-21
+```
+283 passed, 1 warning in 277.25s
+```
 
 ---
 
