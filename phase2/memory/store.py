@@ -45,6 +45,7 @@ class MemoryEntry(BaseModel):
     success_count: int = 0
     fail_count: int = 0
     error: str = ""
+    test_summary: str = ""     # e.g. "12 passed, 0 failed" — for weak-success filtering (C0)
 
 
 # ---------------------------------------------------------------------------

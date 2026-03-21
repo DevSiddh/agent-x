@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v2.1.5 IN PROGRESS — 2026-03-22 — Steps B0+B1+B2+B3+C0+C1 DONE. C2 READY (gates unlocked)
+## Overall Status: v2.1.5 COMPLETE — 2026-03-22 — All Steps B0–B3 + C0–C2 DONE. Next: C3 (multi-language)
 
 ---
 
@@ -483,13 +483,24 @@ Last test run: 2026-03-22
 
 ---
 
-## Step C2 — Gateway Stage (READY — data gates met)
-| Gate | Requirement | Status |
-|------|-------------|--------|
-| Same bug_signature ≥ 3x | C2 gate | UNLOCKED (28x top sig) |
-| 20+ accepted total | v2.2 gate | UNLOCKED (101+ accepted) |
+## Step C2 — Gateway Stage (DONE — 2026-03-22)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/gateway.py | DONE | PASS | GatewayResult, module_not_found rule, check() |
+| phase2/pipeline.py | DONE | PASS | Gateway wired at step 4.3, before memory reuse |
+| tests/test_gateway.py | DONE | 7 passed | match, append, miss, pipeline hit + fallthrough |
 
-Say "step C2" to build.
+Last test run: 2026-03-22
+```
+311 passed, 2 warnings in 103.29s
+```
+
+Gateway rule 1 — module_not_found (59x in memory):
+- Matches: ModuleNotFoundError: No module named X
+- Fix: appends X to requirements.txt
+- Pipeline: accepted with model_used="gateway", zero LLM cost
+
+v2.1.5 COMPLETE — C0 + C1 + C2 all done.
 
 ---
 

@@ -261,6 +261,8 @@ class TestPipelineIntegration:
             patch.object(pl_mod, "rollback", MagicMock()),
             patch.object(pl_mod, "_ensure_fixture_repo", MagicMock()),
             patch.object(pl_mod, "build_context", MagicMock(return_value="ctx")),
+            patch("phase2.memory.similarity.MemoryEngine.find_similar", return_value=None),
+            patch("phase2.gateway.check", return_value=None),
         ):
             original_log = pl_mod.log
             pl_mod.log = CapturingLogger()  # type: ignore[assignment]

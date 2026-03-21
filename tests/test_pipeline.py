@@ -205,25 +205,27 @@ class TestPipelineRun:
                 sanitiser_result=MagicMock(line_count=3),
             )
 
-        with patch("phase2.pipeline.reason", return_value=mock_output):
-            with patch("phase2.pipeline.generate_patch") as mock_gen:
-                mock_gen.return_value = MagicMock(
-                    diff=VALID_DIFF,
-                    model_used="deepseek-chat",
-                    attempt=1,
-                    sanitiser_result=MagicMock(line_count=3, passed=True),
-                )
-                with patch("openai.OpenAI") as mock_openai:
-                    client = MagicMock()
-                    client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
-                    mock_openai.return_value = client
-                    run("syn_001")
+        with patch("phase2.gateway.check", return_value=None):
+          with patch("phase2.memory.similarity.MemoryEngine.find_similar", return_value=None):
+            with patch("phase2.pipeline.reason", return_value=mock_output):
+                with patch("phase2.pipeline.generate_patch") as mock_gen:
+                    mock_gen.return_value = MagicMock(
+                        diff=VALID_DIFF,
+                        model_used="deepseek-chat",
+                        attempt=1,
+                        sanitiser_result=MagicMock(line_count=3, passed=True),
+                    )
+                    with patch("openai.OpenAI") as mock_openai:
+                        client = MagicMock()
+                        client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
+                        mock_openai.return_value = client
+                        run("syn_001")
 
-            # Verify generate_patch was called with enriched context (has STRATEGY: prefix)
-            call_kwargs = mock_gen.call_args
-            passed_context = call_kwargs.kwargs.get("context") or call_kwargs.args[2]
-            assert "STRATEGY:" in passed_context
-            assert mock_output.strategy in passed_context
+                # Verify generate_patch was called with enriched context (has STRATEGY: prefix)
+                call_kwargs = mock_gen.call_args
+                passed_context = call_kwargs.kwargs.get("context") or call_kwargs.args[2]
+                assert "STRATEGY:" in passed_context
+                assert mock_output.strategy in passed_context
 
     def test_reasoner_error_caught_pipeline_continues(
         self, monkeypatch: pytest.MonkeyPatch
@@ -233,19 +235,21 @@ class TestPipelineRun:
 
         monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
 
-        with patch("phase2.pipeline.reason", side_effect=ReasonerError("mock failure")):
-            with patch("phase2.pipeline.generate_patch") as mock_gen:
-                mock_gen.return_value = MagicMock(
-                    diff=VALID_DIFF,
-                    model_used="deepseek-chat",
-                    attempt=1,
-                    sanitiser_result=MagicMock(line_count=3, passed=True),
-                )
-                with patch("openai.OpenAI") as mock_openai:
-                    client = MagicMock()
-                    client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
-                    mock_openai.return_value = client
-                    entry = run("syn_001")
+        with patch("phase2.gateway.check", return_value=None):
+          with patch("phase2.memory.similarity.MemoryEngine.find_similar", return_value=None):
+            with patch("phase2.pipeline.reason", side_effect=ReasonerError("mock failure")):
+                with patch("phase2.pipeline.generate_patch") as mock_gen:
+                    mock_gen.return_value = MagicMock(
+                        diff=VALID_DIFF,
+                        model_used="deepseek-chat",
+                        attempt=1,
+                        sanitiser_result=MagicMock(line_count=3, passed=True),
+                    )
+                    with patch("openai.OpenAI") as mock_openai:
+                        client = MagicMock()
+                        client.chat.completions.create.return_value = _mock_llm(VALID_DIFF)
+                        mock_openai.return_value = client
+                        entry = run("syn_001")
 
         # Pipeline must complete — not crash — when Reasoner fails
         assert isinstance(entry, MemoryEntry)

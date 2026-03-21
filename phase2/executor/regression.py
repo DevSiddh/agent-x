@@ -21,6 +21,7 @@ class TestReport(BaseModel):
     total: int
     exit_code: int
     raw: str
+    note: str = ""   # "flaky" when run_tests_stable detects intermittent failures (C1)
 
 
 def run_tests(fixture_path: Path) -> TestReport:
@@ -82,6 +83,40 @@ def run_tests(fixture_path: Path) -> TestReport:
         exit_code=result.returncode,
         raw=result.stdout + result.stderr,
     )
+
+
+def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
+    """
+    Run pytest runs times consecutively. Returns passed=True only if ALL runs pass.
+    Any single failure → passed=False, note="flaky". (C1 — flaky fix prevention)
+
+    Args:
+        fixture_path: Path to the fixture git repo.
+        runs:         Number of consecutive passing runs required.
+
+    Returns:
+        TestReport — note="flaky" if any run failed.
+    """
+    last_report = TestReport(passed=False, failed_tests=[], total=0, exit_code=1, raw="")
+    for i in range(runs):
+        report = run_tests(fixture_path)
+        last_report = report
+        if not report.passed:
+            log.warning(
+                "executor.flaky",
+                fixture=str(fixture_path),
+                run=i + 1,
+                of=runs,
+            )
+            return TestReport(
+                passed=False,
+                failed_tests=report.failed_tests,
+                total=report.total,
+                exit_code=report.exit_code,
+                raw=report.raw,
+                note="flaky",
+            )
+    return last_report
 
 
 def check_regression(before: TestReport, after: TestReport) -> bool:

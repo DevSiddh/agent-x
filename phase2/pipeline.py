@@ -9,6 +9,7 @@ Usage:
 """
 
 import json
+import subprocess
 import sys
 import time
 import uuid
@@ -34,7 +35,7 @@ from agent_y.reasoner import ReasonerError, reason
 from phase1.log_fetcher.cleaner import clean_and_extract
 from phase2.classifier.regex_pass import ClassifierResult, classify
 from phase2.classifier.safety_gate import check as gate_check
-from phase2.executor.regression import TestReport, check_regression, run_tests
+from phase2.executor.regression import TestReport, check_regression, run_tests, run_tests_stable
 from phase2.executor.runner import apply_patch, rollback
 from phase2.memory.store import MemoryEntry, append, build_default_entry
 from phase2.patch_gen.sanitiser import validate_patch
@@ -77,6 +78,93 @@ def _ensure_fixture_repo(fixture_path: Path) -> None:
     (fixture_path / ".gitattributes").write_text("* text eol=lf\n")
     subprocess.run([*git, "add", "."], check=True)
     subprocess.run([*git, "commit", "-q", "-m", "init buggy state"], check=True)
+
+
+# ---------------------------------------------------------------------------
+# Security + Complexity Helpers (C1)
+# ---------------------------------------------------------------------------
+
+def _run_bandit_check(diff: str, fixture_path: Path, affected_file: str) -> str:
+    """
+    Run bandit security scan on the affected file (after patch content is known).
+    Returns issue summary string on fail, empty string on pass or tool not available.
+    Never raises.
+    """
+    import tempfile
+
+    try:
+        # Write patch to a temp file for analysis
+        # Bandit scans the file content — extract added lines from diff
+        added_lines: list[str] = [
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        ]
+        if not added_lines:
+            return ""
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", mode="w", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write("\n".join(added_lines))
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            [sys.executable, "-m", "bandit", "-q", tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        Path(tmp_path).unlink(missing_ok=True)
+
+        if result.returncode != 0:
+            return result.stdout[:500] or result.stderr[:500]
+    except FileNotFoundError:
+        log.warning("bandit.not_installed")
+    except Exception as exc:
+        log.warning("bandit.error", error=str(exc))
+
+    return ""
+
+
+def _run_radon_check(diff: str, fixture_path: Path, affected_file: str) -> str:
+    """
+    Run radon complexity check on patched lines.
+    Returns complexity detail if high complexity detected, empty string otherwise.
+    Never raises.
+    """
+    import tempfile
+
+    try:
+        added_lines: list[str] = [
+            line[1:] for line in diff.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        ]
+        if not added_lines:
+            return ""
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", mode="w", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write("\n".join(added_lines))
+            tmp_path = tmp.name
+
+        result = subprocess.run(
+            [sys.executable, "-m", "radon", "cc", tmp_path, "-s", "--min", "C"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        Path(tmp_path).unlink(missing_ok=True)
+
+        if result.returncode == 0 and result.stdout.strip():
+            # Any output at --min C means complexity C or above (10+)
+            return result.stdout[:500]
+    except FileNotFoundError:
+        log.warning("radon.not_installed")
+    except Exception as exc:
+        log.warning("radon.error", error=str(exc))
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +223,63 @@ def run(case_id: str) -> MemoryEntry:
             outcome = outcome.model_copy(update={"decision": "abstained"})
             return outcome
 
-        # 4.5 — Thompson Sampling: score this arm before attempting fix
+        # 4.3 — Gateway stage (C2): zero-cost direct fixes for known patterns
+        from phase2.gateway import check as gateway_check
+        _ensure_fixture_repo(fixture_path)
+        rollback(fixture_path)
+        gw_result = gateway_check(cleaned, fixture_path)
+        if gw_result and gw_result.success:
+            log.info("gateway.hit", case_id=case_id, rule=gw_result.matched_rule)
+            gw_after: TestReport = run_tests(fixture_path)
+            if gw_after.passed:
+                outcome = outcome.model_copy(update={
+                    "patch_applied": gw_result.patch_applied,
+                    "decision": "accepted",
+                    "sandbox_result": "pass",
+                    "model_used": "gateway",
+                    "test_summary": f"{gw_after.total} total, {len(gw_after.failed_tests)} failed",
+                })
+                sampler.update(classifier_result.bug_signature, accepted=True)
+                rollback(fixture_path)
+                return outcome
+            log.warning("gateway.tests_failed", case_id=case_id, rule=gw_result.matched_rule)
+        rollback(fixture_path)
+
+        # 4.5 — Memory Reuse Bypass (C0): skip full pipeline for known bugs
+        from phase2.memory.similarity import MemoryEngine
+        engine = MemoryEngine()
+        cached = engine.find_similar(
+            classifier_result.bug_signature,
+            classifier_result.affected_file,
+        )
+        if cached:
+            log.info(
+                "memory.reuse",
+                case_id=case_id,
+                score=cached["match_score"],
+                sig=cached["metadata"]["bug_signature"],
+            )
+            _ensure_fixture_repo(fixture_path)
+            rollback(fixture_path)
+            reuse_result = apply_patch(cached["patch"], fixture_path)
+            if reuse_result.success:
+                after_reuse: TestReport = run_tests(fixture_path)
+                if not check_regression(run_tests(fixture_path), after_reuse):
+                    outcome = outcome.model_copy(update={
+                        "patch_applied": cached["patch"],
+                        "decision": "accepted",
+                        "sandbox_result": "pass",
+                        "model_used": "memory_reuse",
+                        "test_summary": f"{after_reuse.total} total, {len(after_reuse.failed_tests)} failed",
+                    })
+                    sampler.update(classifier_result.bug_signature, accepted=True)
+                    rollback(fixture_path)
+                    return outcome
+            # Reuse failed — fall through to full pipeline
+            log.warning("memory.reuse.failed", case_id=case_id)
+            rollback(fixture_path)
+
+        # Thompson Sampling: score this arm before attempting fix
         exploration_score = sampler.sample(classifier_result.bug_signature)
         log.info(
             "thompson.exploration_score",
@@ -180,6 +324,33 @@ def run(case_id: str) -> MemoryEntry:
             "retries_used": worker_result.attempt - 1,
         })
 
+        # 7.1 — Structural escalation: sanitiser rejected all retries
+        if not worker_result.sanitiser_result.passed and worker_result.attempt >= 3:
+            log.warning(
+                "decision.structural",
+                case_id=case_id,
+                reason="exceeded line limit on all retries",
+            )
+            outcome = outcome.model_copy(update={"decision": "structural"})
+            return outcome
+
+        # 7.2 — Bandit security gate (PostSafetyValidation)
+        _bandit_reject = _run_bandit_check(diff, fixture_path, classifier_result.affected_file)
+        if _bandit_reject:
+            log.warning("security.bandit_fail", case_id=case_id, issues=_bandit_reject)
+            outcome = outcome.model_copy(update={
+                "decision": "rejected",
+                "error": f"bandit: {_bandit_reject}",
+            })
+            return outcome
+
+        # 7.3 — Radon complexity check
+        _radon_risk = _run_radon_check(diff, fixture_path, classifier_result.affected_file)
+        if _radon_risk:
+            log.warning("doctor.architecture_risk", case_id=case_id, complexity=_radon_risk)
+            outcome = outcome.model_copy(update={"decision": "structural"})
+            return outcome
+
         # 8 — Executor: git apply
         apply_result = apply_patch(diff, fixture_path)
 
@@ -192,8 +363,14 @@ def run(case_id: str) -> MemoryEntry:
             })
             return outcome
 
-        # 9 — RegressionCheck
-        after: TestReport = run_tests(fixture_path)
+        # 9 — RegressionCheck (multi-run stable: all 3 runs must pass)
+        after: TestReport = run_tests_stable(fixture_path)
+        if after.note == "flaky":
+            rollback(fixture_path)
+            log.warning("executor.flaky", case_id=case_id)
+            outcome = outcome.model_copy(update={"decision": "abstained", "error": "flaky"})
+            return outcome
+
         regression = check_regression(before, after)
         outcome = outcome.model_copy(update={
             "regression_introduced": regression,
@@ -207,6 +384,9 @@ def run(case_id: str) -> MemoryEntry:
             return outcome
 
         # 10 — DecisionEngine
+        outcome = outcome.model_copy(update={
+            "test_summary": f"{after.total} total, {len(after.failed_tests)} failed",
+        })
         if after.passed:
             outcome = outcome.model_copy(update={"decision": "accepted"})
             log.info("pipeline.accepted", case_id=case_id)
