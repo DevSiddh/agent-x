@@ -18,20 +18,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2 — Python 3.11 (matches .python-version)
+      # 2 — Re-init fixture git repos (stored as plain files, need git init for git apply)
+      - name: Init fixture repos
+        run: |
+          for d in fixtures/syn_001 fixtures/syn_002 fixtures/syn_003 fixtures/syn_004 fixtures/syn_005; do
+            git -C "$d" init -q
+            git -C "$d" add .
+            git -C "$d" -c user.email="ci@agent-x" -c user.name="CI" commit -q -m "init"
+          done
+
+      # 3 — Python 3.11 (matches .python-version)
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # 3 — Clean install (no cache drift)
+      # 4 — Clean install (no cache drift)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4 — Verify environment (same script you run locally)
+      # 5 — Verify environment (same script you run locally)
       - name: Verify environment
         run: python scripts/verify_env.py
         env:
@@ -39,13 +48,13 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 5 — Clear any stale cache on runner
+      # 6 — Clear any stale cache on runner
       - name: Clear pycache
         run: |
           find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
           find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-      # 6 — Run tests
+      # 7 — Run tests
       - name: Run test suite
         run: |
           pytest tests/ -v --tb=short
@@ -54,7 +63,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 7 — Upload test results on failure
+      # 8 — Upload test results on failure
       - name: Upload test report on failure
         if: failure()
         uses: actions/upload-artifact@v4
