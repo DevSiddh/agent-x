@@ -1,5 +1,5 @@
 # Agent-X | Problems & Solutions Master Log
-# Last updated: 2026-03-20
+# Last updated: 2026-03-22
 # Source: Full audit session — validated against codebase + ChatGPT cross-check
 
 ---
@@ -299,3 +299,96 @@
   GitHub Actions parser handles this correctly. Do NOT use `on: [push]` inline style.
   Edit workflow files directly in GitHub web editor to avoid local encoding issues.
 - **Status:** NOTED — use block style on: in all future workflow files
+
+---
+
+## PHASE 4 — KNOWN LIMITATIONS WITH SCHEDULED FIXES
+
+---
+
+### P20 — No auto-PR (patch never pushed back to repo)
+- **Phase:** v2.2 / Step D1
+- **Problem:** Pipeline accepts a patch locally but never pushes it to GitHub.
+  The fix exists in memory but the repo stays broken.
+- **Gate:** 101+ accepted — ALREADY UNLOCKED
+- **Solution:** GitHub API flow:
+  ```python
+  # 1. Create branch: PATCH-{run_id}
+  # 2. Commit changed file(s) via GitHub Contents API
+  # 3. Open PR with description, patch diff, and test results
+  POST /repos/{owner}/{repo}/git/refs       # create branch
+  PUT  /repos/{owner}/{repo}/contents/{path} # commit patch
+  POST /repos/{owner}/{repo}/pulls           # open PR
+  ```
+- **When:** Step D1 — implement after D0 (context tools)
+- **Status:** PENDING
+
+---
+
+### P21 — ngrok URL changes on every restart
+- **Phase:** v2.1 / Dev setup
+- **Problem:** Free ngrok URL changes on restart → GitHub webhook breaks → must reconfigure manually.
+- **Solution:** Use ngrok static domain (ngrok free tier allows 1 static domain).
+  ```bash
+  ngrok http --domain=<your-static-domain>.ngrok-free.app 8000
+  ```
+  Update GitHub webhook URL once to the static domain — never changes again.
+- **When:** Next dev session that needs webhook — do it once, done forever
+- **Status:** PENDING
+
+---
+
+### P22 — Single-file patch limit (multi-file bugs always abstain)
+- **Phase:** v3.0 / Orchestrator
+- **Problem:** Hard Rule 2 caps patches at 15 lines / 1 file. Multi-file bugs
+  (e.g. missing import in A, broken interface in B) are correctly escalated but
+  never fixed — they just accumulate in memory as "structural".
+- **Solution:** Agent-Y plans a sequence of single-file tasks. Orchestrator
+  executes them one at a time, each with its own patch + test cycle.
+  No single patch grows beyond the 15-line cap.
+- **When:** v3.0 Orchestrator (Step C0-C4 of v3.0 roadmap)
+- **Status:** LOCKED — needs Orchestrator first
+
+---
+
+### P23 — No codebase architecture understanding
+- **Phase:** v2.2 / Step D0
+- **Problem:** Agent-Y plans a fix without knowing the project structure.
+  Causes wrong file paths, missed dependencies, and incorrect import guesses.
+- **Solution:** File tree reader tool — passes full directory layout to Agent-Y before planning.
+  ```python
+  def read_file_tree(repo_path: Path, max_depth: int = 3) -> str:
+      # walks repo_path up to max_depth, returns indented tree string
+      # excludes: .git/, __pycache__/, node_modules/, *.pyc
+  ```
+- **When:** Step D0 — first context tool to build
+- **Status:** PENDING
+
+---
+
+### P24 — BuildError always abstains (Docker logs have no Python tracebacks)
+- **Phase:** v2.2+ / Hard limit
+- **Problem:** Docker build failures log the command that failed (e.g. `RUN pip install`)
+  but not the Python traceback. Classifier finds no recognisable pattern → confidence 0.0
+  → observer mode. BuildError is currently unfixable.
+- **Real fix:** Classify from the Docker command that failed, not the traceback.
+  ```
+  "RUN pip install -r requirements.txt" + exit code 1
+      → DependencyError → same fix pipeline as ModuleNotFoundError
+  "RUN python setup.py build" + exit code 1
+      → BuildError:setup_failure → new rule class
+  ```
+- **Gate:** Need 5+ real BuildError runs to map actual log patterns before coding
+- **Status:** DATA-GATED — do not build until gate is met
+
+---
+
+### P25 — RAG limit too conservative (3 past fixes, should be 5-7)
+- **Phase:** v2.2 / context_builder.py
+- **Problem:** RAG returns only 3 past fixes (raised to 5 in C3). With 200+ accepted
+  runs, 5 is still under-using available signal. More past fixes = better patch quality,
+  especially for rare error patterns.
+- **Solution:** After 200+ accepted runs, raise to 7 and monitor context window usage.
+  Cap total RAG section at 800 tokens regardless of limit to prevent overflow.
+- **Gate:** 200+ accepted runs (currently 101+)
+- **Status:** PENDING — monitor, raise when gate met
