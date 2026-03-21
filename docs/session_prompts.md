@@ -1,7 +1,7 @@
 # Agent-X + Agent-Y | Session Prompts — INDEX
 # Say "step N" → Claude loads the right file below and executes that step.
-# Last updated: 2026-03-21
-# Status: v2.1 IN PROGRESS — Step B0 READY
+# Last updated: 2026-03-22
+# Status: v2.1.6 IN PROGRESS — Next: C3b or D0
 
 ---
 
@@ -15,7 +15,7 @@
 
 @docs/prompts/v215_steps.md      ← Steps C0 C1 C2 (v2.1.5 memory engine)
 @docs/prompts/v216_steps.md      ← Steps C3 C3b C4 (v2.1.6 multi-language + visual)
-@docs/prompts/v22_steps.md       ← Step D0 (v2.2 context tools)
+@docs/prompts/v22_steps.md       ← Steps D0 D1 (v2.2 context tools + auto-PR)
 
 ---
 
@@ -37,16 +37,17 @@
 
 | Say         | File                        | Status   |
 |-------------|-----------------------------|----------|
-| step B0     | v21_steps.md                | READY    |
-| step B1     | v21_steps.md                | PENDING  |
-| step B2     | v21_steps.md                | PENDING  |
-| step B3     | v21_steps.md                | PENDING  |
-| step C0     | v215_steps.md               | PENDING  |
-| step C1     | v215_steps.md               | PENDING  |
-| step C2     | v215_steps.md               | PENDING  |
-| step C3     | v216_steps.md               | PENDING  |
+| step B0     | v21_steps.md                | DONE     |
+| step B1     | v21_steps.md                | DONE     |
+| step B2     | v21_steps.md                | DONE     |
+| step B3     | v21_steps.md                | DONE     |
+| step C0     | v215_steps.md               | DONE     |
+| step C1     | v215_steps.md               | DONE     |
+| step C2     | v215_steps.md               | DONE     |
+| step C3     | v216_steps.md               | DONE     |
 | step C3b    | v216_steps.md               | PENDING  |
 | step C4     | v216_steps.md               | PENDING  |
 | step D0     | v22_steps.md                | PENDING  |
+| step D1     | v22_steps.md                | PENDING  |
 | step A4     | v1_steps_9_14.md            | TRIGGER  |
 | audit       | audit.md                    | ALWAYS   |
