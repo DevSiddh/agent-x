@@ -57,7 +57,9 @@
       "Bash(cp \"C:/Users/yagne/OneDrive/Desktop/project x/agent-x/docs/SESSION_END_CHECKLIST.md\" \"C:/Users/yagne/.claude/templates/SESSION_END_CHECKLIST.md\")",
       "Bash(cp \"C:/Users/yagne/OneDrive/Desktop/project x/agent-x/docs/CORE_FILES.md\" \"C:/Users/yagne/.claude/templates/CORE_FILES.md\")",
       "Bash(python:*)",
-      "WebFetch(domain:chatgpt.com)"
+      "WebFetch(domain:chatgpt.com)",
+      "WebFetch(domain:api-docs.deepseek.com)",
+      "Bash(done)"
     ]
   }
 }

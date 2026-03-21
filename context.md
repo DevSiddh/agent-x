@@ -1,10 +1,15 @@
 # Agent-X | System Context
 # Rule: this file = index only, max 80 lines, NEVER grows beyond this
 
-## Mission
-Autonomous CI/CD self-healing system.
-Detects, classifies, patches, and validates GitHub Actions failures.
-Zero regressions. Zero cost. Gets smarter every run.
+## Vision
+Autonomous software engineer. User gives an idea → system thinks,
+designs, builds, tests, fixes its own errors, learns from every run.
+CI/CD repair is the proving ground — not the destination.
+Full vision → @docs/vision.md
+
+## Current Mission (v2.1)
+Prove the repair loop works on real GitHub repos before building
+the planning + task loop on top of it.
 
 ## Architecture Flow (strict order)
 GitHub Actions fails → Observer captures log (last 50 lines)

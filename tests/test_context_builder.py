@@ -155,8 +155,8 @@ class TestRAGRetrieval:
         ctx = build_context(_dep_result(), _fixture_path())
         assert "accepted" in ctx
 
-    def test_at_most_3_past_fixes(self, patch_memory: Path) -> None:
-        for i in range(6):
+    def test_at_most_5_past_fixes(self, patch_memory: Path) -> None:
+        for i in range(8):
             entry = build_default_entry(f"run-{i:03d}", "synthetic")
             entry = entry.model_copy(update={
                 "failure_category": "DependencyError",
@@ -166,8 +166,8 @@ class TestRAGRetrieval:
             })
             append(entry)
         ctx = build_context(_dep_result(), _fixture_path())
-        # Should have at most 3 "Past Fix N" headers
-        assert ctx.count("### Past Fix") <= 3
+        # Should have at most 5 "Past Fix N" headers (RAG limit)
+        assert ctx.count("### Past Fix") <= 5
 
     def test_different_category_not_included(self, patch_memory: Path) -> None:
         entry = build_default_entry("run-001", "synthetic")

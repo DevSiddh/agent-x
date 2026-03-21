@@ -1,14 +1,34 @@
 # Agent-Y | Ollama Migration Guide
-# Use this when: sensitive code in pipeline OR monthly DeepSeek bill > $30
+# Use this when ALL 3 conditions are true (not just one)
 # Last updated: 2026-03-20
 
 ---
 
-## When to migrate (both must be true)
-- [ ] Trigger fired: real prod repos with proprietary code, OR bill > $30/month
-- [ ] Step A4 is DONE (agent_y/prompt_loader.py exists, REASONER_MODEL switch works)
+## When to migrate (ALL 3 must be true — not just one)
 
+- [ ] Condition 1: Sensitive code — running on private repos, client code, proprietary systems
+- [ ] Condition 2: Cost actually hurts — real friction, avoiding loops because of API cost
+- [ ] Condition 3: Training data ready — 50+ successful full Y→X→Y loops, curated
+
+If any condition is NOT met → stay on DeepSeek. System stability > model switching.
 If Step A4 is not done yet → say "step A4" first, then return here.
+
+## The Fine-Tuning Pipeline (read before migrating)
+
+Do NOT skip the curation step. Garbage in = garbage fine-tuned model.
+
+```
+DeepSeek → generates Y→X→Y execution traces
+         ↓
+Filter: keep only traces where decision=accepted + confidence>=0.85
+Curate: structure into (system_prompt, user_input, agent_y_output) pairs
+         ↓
+Training dataset (high quality only — 500+ examples minimum)
+         ↓
+Fine-tune Qwen2.5-7B on your curated dataset
+         ↓
+Proprietary Agent-Y — runs offline, reasons in your exact style
+```
 
 ---
 

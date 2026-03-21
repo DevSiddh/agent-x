@@ -24,6 +24,7 @@ import structlog
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from agent_y.reasoner import ReasonerError, reason
 from phase2.classifier.regex_pass import classify
 from phase2.classifier.safety_gate import check as gate_check
 from phase2.context_builder import build_context
@@ -222,10 +223,10 @@ def process_next() -> MemoryEntry | None:
         raw = fetch_real_log(repo, run_id, run_attempt)
         log.info("webhook_worker.log_fetched", repo=repo, run_id=run_id, bytes=len(raw))
 
-        # 5 — Clean
+        # 5 — Clean (window=40, 75/25 bias — captures traceback before runner summary)
         capped = cap_log(raw)
         cleaned = clean_real_log(capped)
-        window = extract_failure_window(cleaned, n=20)
+        window = extract_failure_window(cleaned)
 
         # 6 — Classify
         classifier_result = classify(window, repo=repo)
@@ -256,10 +257,20 @@ def process_next() -> MemoryEntry | None:
         fixture_path = Path(tempfile.mkdtemp())
         context = build_context(classifier_result, fixture_path, error_lines=window)
 
-        # 8.5 — Agent-Y disabled for real CI logs
-        # Real logs are too noisy for deepseek-reasoner to parse reliably.
-        # Always falls back anyway — skip the 2 wasted API calls.
-        enriched_context = context
+        # 8.5 — Agent-Y Reasoner (re-enabled — feeds clean 40-line window, not full log)
+        # context is built from window (40 lines) — clean enough for deepseek-reasoner
+        try:
+            reasoner_output = reason(context, classifier_result)
+            log.info(
+                "reasoner.ok",
+                repo=repo,
+                strategy=reasoner_output.strategy[:80],
+                confidence=reasoner_output.confidence,
+            )
+            enriched_context = context + "\n\nSTRATEGY: " + reasoner_output.strategy
+        except ReasonerError as exc:
+            log.warning("reasoner.fallback", repo=repo, error=str(exc))
+            enriched_context = context  # fall through — pipeline continues
 
         # 9 — Patch generation
         worker_result = generate_patch(

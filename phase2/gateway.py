@@ -84,6 +84,87 @@ def _fix_module_not_found(error_lines: list[str], fixture_path: Path) -> str | N
     return f"appended {module_name} to requirements.txt"
 
 
+def _fix_no_such_table(error_lines: list[str], fixture_path: Path) -> str | None:
+    """
+    Add Base.metadata.create_all(engine) after engine creation in database setup file.
+    Source: 13x in memory — ConfigError:no_such_table pattern.
+    """
+    for py_file in sorted(fixture_path.rglob("*.py")):
+        content = py_file.read_text(encoding="utf-8")
+        if "create_engine" not in content:
+            continue
+        if "create_all" in content:
+            continue  # this file already fixed, check others
+        new_content = re.sub(
+            r"(engine\s*=\s*create_engine[^\n]+\n)",
+            r"\1Base.metadata.create_all(engine)\n",
+            content,
+        )
+        if new_content == content:
+            continue
+        py_file.write_text(new_content, encoding="utf-8")
+        log.info("gateway.fix.no_such_table", file=py_file.name)
+        return f"added Base.metadata.create_all(engine) in {py_file.name}"
+    return None
+
+
+def _fix_pydantic_namespace(error_lines: list[str], fixture_path: Path) -> str | None:
+    """
+    Add model_config = ConfigDict(protected_namespaces=()) to Pydantic BaseModel classes.
+    Source: 12x in memory — RuntimeError:pydantic_namespace pattern.
+    """
+    for py_file in sorted(fixture_path.rglob("*.py")):
+        content = py_file.read_text(encoding="utf-8")
+        if "BaseModel" not in content:
+            continue
+        if "model_config" in content:
+            continue  # this file already fixed, check others
+
+        # Add ConfigDict import
+        if "ConfigDict" not in content:
+            content = content.replace(
+                "from pydantic import BaseModel",
+                "from pydantic import BaseModel, ConfigDict",
+            )
+
+        # Add model_config to first BaseModel subclass
+        new_content = re.sub(
+            r"(class \w+\(BaseModel\):)\n",
+            r"\1\n    model_config = ConfigDict(protected_namespaces=())\n",
+            content,
+            count=1,
+        )
+        if new_content == content:
+            continue
+        py_file.write_text(new_content, encoding="utf-8")
+        log.info("gateway.fix.pydantic_namespace", file=py_file.name)
+        return f"added model_config = ConfigDict(protected_namespaces=()) in {py_file.name}"
+    return None
+
+
+def _fix_no_build_isolation(error_lines: list[str], fixture_path: Path) -> str | None:
+    """
+    Add --no-build-isolation flag to pip install commands in Makefile.
+    Source: 11x in memory — EnvironmentError:no_build_isolation pattern.
+    """
+    makefile = fixture_path / "Makefile"
+    if not makefile.exists():
+        return None
+    content = makefile.read_text(encoding="utf-8")
+    if "--no-build-isolation" in content:
+        return None  # already fixed
+    new_content = re.sub(
+        r"pip install(?!\s+--no-build-isolation)",
+        "pip install --no-build-isolation",
+        content,
+    )
+    if new_content == content:
+        return None
+    makefile.write_text(new_content, encoding="utf-8")
+    log.info("gateway.fix.no_build_isolation")
+    return "added --no-build-isolation to Makefile pip install"
+
+
 # ---------------------------------------------------------------------------
 # Rule registry
 # ---------------------------------------------------------------------------
@@ -96,12 +177,29 @@ class _Rule:
 
 
 GATEWAY_RULES: list[_Rule] = [
-    # Rule 1 — ModuleNotFoundError → add to requirements.txt
-    # Source: top memory pattern — 59x real occurrences
+    # Rule 1 — ModuleNotFoundError → add to requirements.txt (59x)
     _Rule(
         name="module_not_found",
         pattern=re.compile(r"ModuleNotFoundError: No module named", re.I),
         fix=_fix_module_not_found,
+    ),
+    # Rule 2 — no such table → add Base.metadata.create_all(engine) (13x)
+    _Rule(
+        name="no_such_table",
+        pattern=re.compile(r"no such table:", re.I),
+        fix=_fix_no_such_table,
+    ),
+    # Rule 3 — pydantic namespace conflict → add model_config (12x)
+    _Rule(
+        name="pydantic_namespace",
+        pattern=re.compile(r"Field.*conflicts with protected namespace|PydanticUserError", re.I),
+        fix=_fix_pydantic_namespace,
+    ),
+    # Rule 4 — no build isolation → add --no-build-isolation to Makefile (11x)
+    _Rule(
+        name="no_build_isolation",
+        pattern=re.compile(r"no.build.isolation", re.I),
+        fix=_fix_no_build_isolation,
     ),
 ]
 
@@ -180,14 +278,14 @@ if __name__ == "__main__":
         (fixture / "requirements.txt").write_text("pandas==2.0.0\n", encoding="utf-8")
         result = check(["ModuleNotFoundError: No module named 'pandas'"], fixture)
         assert result is None, "Expected None — module already present"
-        print("  PASS  Test 3: module already present → gateway miss")
+        print("  PASS  Test 3: module already present -> gateway miss")
 
-    # Test 4: no matching pattern → None
+    # Test 4: no matching pattern -> None
     with tempfile.TemporaryDirectory() as tmp:
         fixture = Path(tmp)
         result = check(["AssertionError: discount 150 > 100"], fixture)
         assert result is None
-        print("  PASS  Test 4: no match → None")
+        print("  PASS  Test 4: no match -> None")
 
     print("\ngateway.py smoke test PASSED")
     sys.exit(0)

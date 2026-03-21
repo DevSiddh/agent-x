@@ -9,6 +9,45 @@
 
 ---
 
+## THE BUILD FLOW (every project follows this)
+
+```
+YOUR IDEA
+    │
+    ▼
+"idea" ──► 4-gate validation
+    │       Gate 1 Gemini    : expand possibilities
+    │       Gate 2 ChatGPT   : find constraints
+    │       Gate 3 Perplexity: verify reality
+    │       Gate 4 Claude    : ship or kill
+    │       FAIL any gate ──► park in graveyard
+    │       PASS all 4   ──► continue
+    ▼
+"brief" ──► fill CONTEXT_PROMPT_TEMPLATE (15 min)
+    │        Claude generates 6 files from your answers
+    ▼
+"scaffold" ──► folder + Makefile + CI + hooks created
+    ▼
+PHASE 0 ──► define ALL constants before code
+    │        MAX_OUTPUT_LINES, MAX_RETRIES, CONFIDENCE_THRESHOLD
+    │        data gates for any ML/stats features
+    ▼
+STEP 0 ──► spike (50 lines, throwaway)
+    │        FAIL ──► fix assumption, re-spike
+    │        PASS ──► continue with confidence
+    ▼
+STEP N ──► build one module
+    │        write code → smoke test → pytest → update progress.md
+    │        tests PASS ──► commit ──► next step
+    │        tests FAIL ──► fix, never move on
+    ▼
+"audit" ──► run at every phase boundary
+    ▼
+DONE CONDITION MET ──► ship
+```
+
+---
+
 ## WHAT THIS TEMPLATE GIVES YOU
 
 Before writing a single line of code you will have:

@@ -69,7 +69,7 @@ def build_context(
         log.warning("context_builder.file_missing", file=affected)
 
     # --- Section 3: Past similar fixes (RAG) -------------------------------
-    similar: list[MemoryEntry] = get_similar(classifier_result.bug_signature, limit=3)
+    similar: list[MemoryEntry] = get_similar(classifier_result.bug_signature, limit=5)
 
     if similar:
         past_fixes: list[str] = []

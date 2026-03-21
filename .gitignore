@@ -41,6 +41,10 @@ spike/__pycache__/
 fixtures/*/.*
 fixtures/*/.git/
 
+# Binaries — never commit executables
+*.exe
+ngrok*
+
 # OS
 .DS_Store
 Thumbs.db

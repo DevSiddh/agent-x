@@ -56,12 +56,13 @@ Scaffold skill:    ~/.claude/templates/scaffold.md
 
 ## MY PROJECTS
 
-### Agent-X v1 (active)
+### Agent-X (active)
 Path:     C:/Users/yagne/OneDrive/Desktop/project x/agent-x/
-Status:   Phase 1 webhook done (15 tests pass). Step 0 next.
+Status:   v1.2 COMPLETE — 187 tests passing, 5/5 accepted
+          Steps 0-10 DONE. Next: step 11 (Thompson — LOCKED until 50+ runs)
 Docs:     docs/progress.md → current status
-          docs/session_prompts.md → say "step N" to build
-Template: docs/PROJECT_TEMPLATE.md → reusable skeleton
+          docs/session_prompts.md → say "step N" to build / "audit" for health check
+Template: docs/PROJECT_TEMPLATE.md → reusable skeleton for all future projects
 
 ---
 
@@ -75,3 +76,36 @@ Template: docs/PROJECT_TEMPLATE.md → reusable skeleton
 6. Never push to main
 7. Run make clean before every test run
 8. Spike first — prove core loop before building 8 modules
+
+---
+
+## ANTI-OVERENGINEERING CONSTANTS (apply to every project)
+
+These must be defined in CLAUDE.md before building. Learned from Agent-X.
+
+### The Thompson Rule (data-gated features)
+Any feature that learns from data needs a data gate BEFORE you build it.
+Template (fill per feature):
+  Feature: ___  Data gate: ___ runs  Fallback: ___  Unlock: ___
+If you can't fill this → you're not ready to build the feature.
+
+### LLM Projects (mandatory)
+  MAX_OUTPUT_LINES  → define before worker (default: 15)
+  MAX_RETRIES       → define before worker (default: 3)
+  RETRY_MUST_CHANGE → retry prompt must differ from initial (always true)
+  SANITISE_ALWAYS   → strip + validate LLM output before use (always true)
+
+### Confidence / Classification
+  CONFIDENCE_THRESHOLD → define before classifier (default: 0.85)
+  MIN_CALIBRATION_RUNS → define when you'll revisit it (default: 20)
+  LOG_ALL_SCORES       → always log for calibration (always true)
+
+### Context Window Budget
+  CONTEXT_MD_MAX_LINES   = 80   (index only, never grows)
+  ERROR_WINDOW_LINES     = 50   (log lines to parser)
+  PROMPT_ERROR_LINES_CAP = 20   (error lines in LLM prompt)
+  RAG_SIMILAR_LIMIT      = 3    (past examples per query)
+
+### Storage
+  DEDUP_ON          → define field(s) before memory store
+  STORAGE_NEVER_RAISES → write must never crash pipeline (always true)

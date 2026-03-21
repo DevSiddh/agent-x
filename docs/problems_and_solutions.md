@@ -246,3 +246,56 @@
 - **Problem:** Hardcoded paths may fail on Windows if not using pathlib consistently
 - **Solution:** Use `Path` objects and pass `cwd=` to subprocess, never string concat paths
 - **Status:** PENDING — enforce in executor build
+
+---
+
+### P17 — uvicorn not on PATH on Windows Store Python
+- **Phase:** Dev setup / v2.1
+- **File:** Makefile / scripts/verify_env.py
+- **Problem:** Windows Store Python installs scripts to a user-local path not on PATH.
+  Running `uvicorn` directly fails with "not recognized as internal or external command".
+  Affects any CLI tool installed via pip (black, uvicorn, pytest, etc.).
+- **Solution:** Always invoke via `python -m <tool>`:
+  ```bash
+  python -m uvicorn phase1.webhook.server:app --port 8000
+  python -m pytest tests/
+  python -m black .
+  ```
+  Add to scripts/verify_env.py: check `python -m uvicorn --version` not `uvicorn --version`.
+  Add to Makefile: all server/test targets use `python -m` prefix.
+- **Status:** NOTED — apply to all future shell commands in this project
+
+---
+
+### P18 — GITHUB_WEBHOOK_SECRET not loaded when uvicorn started without --env-file
+- **Phase:** Dev setup / v2.1
+- **File:** scripts/verify_env.py + Makefile
+- **Problem:** Starting uvicorn without `--env-file .env` means `GITHUB_WEBHOOK_SECRET`
+  is never loaded. Server starts fine but returns 401 on every webhook request.
+  No error log says "secret missing" — just silent 401s. Very hard to debug.
+- **Solution:** Always start server with `--env-file .env`:
+  ```bash
+  python -m uvicorn phase1.webhook.server:app --port 8000 --env-file .env
+  ```
+  Add to scripts/verify_env.py: check `GITHUB_WEBHOOK_SECRET` is set before server start.
+  Add to Makefile: `serve` target always includes `--env-file .env`.
+- **Status:** NOTED — enforce in Makefile serve target
+
+---
+
+### P19 — GitHub Actions YAML 'on' is a reserved word
+- **Phase:** Dev setup / v2.1
+- **File:** .github/workflows/ci.yml in test repos
+- **Problem:** In YAML 1.1 (used by GitHub Actions), `on` is a boolean reserved word.
+  Writing `on: [push]` causes "No event triggers defined in `on`" error.
+  Workflow fails immediately at parse time — no useful CI logs generated.
+- **Solution:** Write the trigger key unquoted with block style:
+  ```yaml
+  on:
+    push:
+      branches:
+        - main
+  ```
+  GitHub Actions parser handles this correctly. Do NOT use `on: [push]` inline style.
+  Edit workflow files directly in GitHub web editor to avoid local encoding issues.
+- **Status:** NOTED — use block style on: in all future workflow files

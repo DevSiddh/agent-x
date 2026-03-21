@@ -1,4 +1,4 @@
-# CLAUDE.md — Agent-X v1.3
+# CLAUDE.md — Agent-X + Agent-Y | Autonomous Software Engineer
 
 ## GIT RULES
 - ONLY contributor: CH Y SAI SIDDHARDHA <challayagneshsaisiddhardha@gmail.com>
@@ -23,8 +23,16 @@ Layer 2 — pre-push hook    : runs verify + pytest before every push
 Layer 3 — act local runner : simulates GitHub Actions locally
 Setup: bash scripts/install_hooks.sh
 
-## Current Build Status (2026-03-20) — v1.3 COMPLETE
+## VISION (never lose this)
+Agent-Y (brain) + Agent-X (hands) = autonomous software engineer.
+User gives an idea → Agent-Y thinks, designs, architects, breaks into tasks
+→ Agent-X builds, tests, fixes errors, reports back → Agent-Y adapts plan
+→ loop until done. CI/CD repair is just the first proving ground.
+Full vision → @docs/vision.md
+
+## Current Build Status (2026-03-20) — v2.1 IN PROGRESS
 206 tests passing — memory.jsonl has 51+ entries — thompson_state.json active
+v2.1 dev environment set up — live webhook event queued — Step B0 READY
 Full step history → @docs/progress.md
 
 ## Pipeline (strict order — do not change)
@@ -58,9 +66,17 @@ v1.1 → Context Builder + RAG                    [DONE — Step 9]
 v1.2 → Patch quality fix (5/5 accepted)         [DONE — Step 10]
 v1.3 → Thompson Sampling                         [DONE — Step 11]
 v1.4 → Claude Code hooks + rules                [DONE — Steps 12-14]
-v2.0 → Agent-Y (Reasoning layer / brain)        [NEXT]
-v2.1 → Real GitHub webhook integration          [after v2.0]
-v2.2 → Local model rotation (Qwen → DeepSeek)   [after v2.1]
+v2.0 → Agent-Y reasoning layer                  [DONE — Steps A0-A3]
+v2.1 → Real GitHub webhook integration          [IN PROGRESS — Step B0 READY]
+v2.1.5 → Memory Engine + Pipeline Hardening    [PENDING — after B3 — Steps C0-C2]
+v2.1.6 → Multi-language executor + classifier + log cleaner + Playwright  [PENDING — Steps C3-C4]
+v2.2   → Context tools: file tree + web reader + GitHub search + PDF summarizer [PENDING — Step D0]
+v2.2   → Auto-PR (needs 20+ real accepted fixes)  [LOCKED — data gate]
+v2.3 → Multi-repo support                       [after v2.2]
+v3.0 → Plan + Task queue: Y designs, X executes, feedback loop
+v3.1 → Project memory: goal + architecture + progress state
+v4.0 → Fine-tune local model on prompt stack (distillation)
+v4.1 → Full autonomous loop: idea in → working repo out
 
 ## ENFORCEMENT RULE
 CLAUDE.md = suggestions (~80% compliance)
