@@ -4,23 +4,23 @@
     "beta": 3
   },
   "synthetic:DependencyError:ModuleNotFoundError:requirements.txt": {
-    "alpha": 284,
+    "alpha": 292,
     "beta": 1
   },
   "synthetic:EnvironmentError:no_build_isolation:Makefile": {
-    "alpha": 25,
+    "alpha": 26,
     "beta": 1
   },
   "synthetic:ConfigError:no_such_table:app/database.py": {
-    "alpha": 25,
+    "alpha": 26,
     "beta": 1
   },
   "synthetic:RuntimeError:pydantic_namespace:app/schemas.py": {
-    "alpha": 25,
+    "alpha": 26,
     "beta": 1
   },
   "synthetic:EnvironmentError:stale_pycache:scripts/restart.sh": {
-    "alpha": 25,
+    "alpha": 26,
     "beta": 1
   }
 }
