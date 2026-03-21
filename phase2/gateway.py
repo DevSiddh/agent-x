@@ -84,7 +84,7 @@ def _fix_module_not_found(error_lines: list[str], fixture_path: Path) -> str | N
     return f"appended {module_name} to requirements.txt"
 
 
-def _fix_no_such_table(error_lines: list[str], fixture_path: Path) -> str | None:
+def _fix_no_such_table(_error_lines: list[str], fixture_path: Path) -> str | None:
     """
     Add Base.metadata.create_all(engine) after engine creation in database setup file.
     Source: 13x in memory — ConfigError:no_such_table pattern.
@@ -108,7 +108,7 @@ def _fix_no_such_table(error_lines: list[str], fixture_path: Path) -> str | None
     return None
 
 
-def _fix_pydantic_namespace(error_lines: list[str], fixture_path: Path) -> str | None:
+def _fix_pydantic_namespace(_error_lines: list[str], fixture_path: Path) -> str | None:
     """
     Add model_config = ConfigDict(protected_namespaces=()) to Pydantic BaseModel classes.
     Source: 12x in memory — RuntimeError:pydantic_namespace pattern.
@@ -142,7 +142,7 @@ def _fix_pydantic_namespace(error_lines: list[str], fixture_path: Path) -> str |
     return None
 
 
-def _fix_no_build_isolation(error_lines: list[str], fixture_path: Path) -> str | None:
+def _fix_no_build_isolation(_error_lines: list[str], fixture_path: Path) -> str | None:
     """
     Add --no-build-isolation flag to pip install commands in Makefile.
     Source: 11x in memory — EnvironmentError:no_build_isolation pattern.
@@ -198,7 +198,7 @@ GATEWAY_RULES: list[_Rule] = [
     # Rule 4 — no build isolation → add --no-build-isolation to Makefile (11x)
     _Rule(
         name="no_build_isolation",
-        pattern=re.compile(r"no.build.isolation", re.I),
+        pattern=re.compile(r"no[\s_-]build[\s_-]isolation", re.I),
         fix=_fix_no_build_isolation,
     ),
 ]
