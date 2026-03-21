@@ -254,15 +254,17 @@ timeout_error       → execution took too long (Docker/VPS)
 ## Interface Layer (v3.2 target)
 
 ```
-User (phone / laptop / CLI)
+User (phone / laptop / CLI / local terminal)
         ↓
 Interface Layer
-├── Telegram bot  ← fastest win, works on phone
-├── CLI tool      ← agentx fix / agentx build "idea" / agentx status
-└── Web UI        ← input box + status panel + logs (Streamlit or plain HTML)
+├── Telegram bot      ← fastest win, works on phone
+├── CLI tool          ← agentx fix / agentx build "idea" / agentx status
+├── Local log watcher ← watchdog monitors app.log → triggers pipeline offline
+└── Web UI            ← input box + status panel + logs (Streamlit or plain HTML)
         ↓
 Control API (FastAPI)
-├── POST /task    {"goal": "fix failing CI"}
+├── POST /task        {"goal": "fix failing CI"}
+├── POST /fix-local   {"log": "...", "repo_path": "./my-project"}
 ├── GET /status/{task_id}
 └── GET /logs/{task_id}
         ↓
@@ -273,6 +275,29 @@ Executor (local → Docker → VPS)
 
 Interaction is stateless per request — state lives in backend.
 Phone can disconnect. Task continues. Check status later.
+
+## Local Dev Support (v3.2 — same pipeline, different trigger)
+
+Solo devs without GitHub CI can still use Agent-X:
+
+```
+Trigger 1 — Webhook (current):
+  GitHub CI fails → webhook → Agent-X → auto-PR
+
+Trigger 2 — Local log watcher (v3.2):
+  app.log error detected → same pipeline → git apply locally → tests run locally
+  No webhook needed. Works fully offline.
+
+Trigger 3 — CLI (v3.2):
+  agentx fix --log app.log --repo ./my-project
+  Dev pipes a log → pipeline runs → patch suggested → one command to apply
+
+Trigger 4 — Telegram (v3.2):
+  Send error log to bot → get fix on phone → approve → applied
+```
+
+All 4 triggers feed the same pipeline. Core doesn't change.
+The only difference is the entry point and where git apply runs.
 
 Interruptible loop (v4.x):
 `/pause` `/approve` `/abort` `/change_strategy` — human controls live loop.
