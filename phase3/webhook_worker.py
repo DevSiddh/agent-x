@@ -268,7 +268,7 @@ def process_next() -> MemoryEntry | None:
                 confidence=reasoner_output.confidence,
             )
             enriched_context = context + "\n\nSTRATEGY: " + reasoner_output.strategy
-        except ReasonerError as exc:
+        except (ReasonerError, EnvironmentError) as exc:
             log.warning("reasoner.fallback", repo=repo, error=str(exc))
             enriched_context = context  # fall through — pipeline continues
 

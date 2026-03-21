@@ -303,7 +303,7 @@ def run(case_id: str) -> MemoryEntry:
                 confidence=reasoner_output.confidence,
             )
             enriched_context = context + "\n\nSTRATEGY: " + reasoner_output.strategy
-        except ReasonerError as exc:
+        except (ReasonerError, EnvironmentError) as exc:
             log.warning("reasoner.fallback", case_id=case_id, error=str(exc))
             enriched_context = context  # Agent-X baseline — pipeline continues
 
