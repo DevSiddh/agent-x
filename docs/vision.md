@@ -359,6 +359,56 @@ v4.0  → Fine-tune local model on memory.jsonl (LoRA, gate: 500+ accepted runs)
 v4.1  → Idea in → working repo out (interruptible, phone-controllable)
 ```
 
+## Multi-Agent Architecture (v4.x — when it gets big)
+
+Same Orchestrator loop, specialized agents per domain:
+
+```
+Agent-Y          → brain — plans everything, reasons, architects
+Agent-X          → backend / infra / CI fixes (EXISTS NOW)
+Agent-UI         → frontend — components, styles, visual regression
+Agent-Data       → SQL / migrations / schemas
+Orchestrator     → coordinates all agents, one task at a time
+```
+
+Agent-UI pattern (same as Agent-X, different domain):
+```
+Agent-Y plans UI task
+→ Agent-UI generates component
+→ Playwright screenshots it
+→ pixel-diff against expected
+→ accepted/rejected → memory
+→ Thompson learns which UI patterns work
+```
+
+### Solo vs Team boundary
+
+```
+Solo buildable (v1 → v4.1):
+  Agent-X + Agent-Y + Orchestrator
+  LoRA fine-tuning
+  Interface layer (CLI + Telegram)
+  Agent-UI basic version
+
+Needs a team (after v4.1):
+  Agent-UI at production quality  → frontend engineer
+  Multi-repo at scale (100+ repos) → DevOps
+  Docker/VPS executor              → infra engineer
+  Fine-tuning pipeline             → ML engineer
+```
+
+### The play
+```
+v1-v2  → prove it works           (DONE)
+v3-v4  → make it autonomous       (building now)
+v4.1   → idea in → working repo out
+          → that demo gets funding or a team
+```
+One person can get to v4.1. After that the project attracts people.
+That's how every serious tool started.
+
+---
+
 ## Why v2.1 Comes Before v3.0 (not negotiable)
 
 ChatGPT suggested starting v3.0 infrastructure at B0. Rejected.
