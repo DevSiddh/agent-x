@@ -1,8 +1,8 @@
 """
 phase2/context_builder.py
-v1.1 ContextBuilder — enriches DeepSeek prompt with:
+v2.1 ContextBuilder — enriches DeepSeek prompt with:
   1. Affected file content (spike proved LLM cannot patch blind)
-  2. Up to 3 past similar fixes from memory store (RAG retrieval)
+  2. Up to 3 past similar fixes from MemoryEngine.find_for_rag() (triple-hybrid RAG)
   3. Error summary header
 
 Replaces the inline _build_context() helper in pipeline.py.
@@ -14,14 +14,23 @@ import structlog
 
 try:
     from phase2.classifier.regex_pass import ClassifierResult
-    from phase2.memory.store import MemoryEntry, get_similar
+    from phase2.memory.similarity import MemoryEngine, _RAG_HIGH_THRESHOLD
+    from phase2.tools.github_file import extract_relative_path, fetch_file
 except ImportError:
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from phase2.classifier.regex_pass import ClassifierResult
-    from phase2.memory.store import MemoryEntry, get_similar
+    from phase2.memory.similarity import MemoryEngine, _RAG_HIGH_THRESHOLD
+    from phase2.tools.github_file import extract_relative_path, fetch_file
 
 log = structlog.get_logger()
+
+
+def _action_tag(score: float) -> str:
+    """Map hybrid score to action-oriented tag for Agent-Y context header."""
+    if score >= _RAG_HIGH_THRESHOLD:
+        return "[HIGH RELEVANCE: Adapt this pattern]"
+    return "[LOW RELEVANCE: Loose inspiration only. DO NOT copy directly.]"
 
 
 def build_context(
@@ -65,25 +74,58 @@ def build_context(
         )
         log.info("context_builder.file_loaded", file=affected)
     else:
-        sections.append(f"## Affected File: {affected}\n# File not found in fixture")
-        log.warning("context_builder.file_missing", file=affected)
+        # P23 fix: affected_file may be a GitHub Actions runner absolute path.
+        # Try to extract repo-relative path and fetch from GitHub API.
+        file_content: str | None = None
+        rel_path = extract_relative_path(affected)
+        if rel_path:
+            # repo is first segment of bug_signature: "owner/repo:Category:kw:file"
+            sig_parts = classifier_result.bug_signature.split(":", 1)
+            repo = sig_parts[0] if sig_parts else ""
+            if repo:
+                file_content = fetch_file(repo, rel_path)
+                if file_content is not None:
+                    log.info(
+                        "context_builder.file_fetched_github",
+                        file=rel_path,
+                        repo=repo,
+                    )
 
-    # --- Section 3: Past similar fixes (RAG) -------------------------------
-    similar: list[MemoryEntry] = get_similar(classifier_result.bug_signature, limit=5)
+        if file_content is not None:
+            sections.append(
+                f"## Affected File: {rel_path}\n```\n{file_content}\n```"
+            )
+        else:
+            sections.append(
+                f"## Affected File: {affected}\n# File not found in fixture"
+            )
+            log.warning("context_builder.file_missing", file=affected)
 
-    if similar:
+    # --- Section 3: Past similar fixes (triple-hybrid RAG) -----------------
+    engine = MemoryEngine()
+    rag_results: list[tuple[dict, float]] = engine.find_for_rag(
+        category=classifier_result.category,
+        matched_pattern=classifier_result.matched_pattern,
+        keyword=classifier_result.keyword,
+        affected_file=classifier_result.affected_file,
+        bug_signature=classifier_result.bug_signature,
+    )
+
+    if rag_results:
         past_fixes: list[str] = []
-        for i, entry in enumerate(similar, 1):
-            patch_preview = (entry.patch_applied or "").strip()
+        for i, (entry_dict, score) in enumerate(rag_results, 1):
+            tag = _action_tag(score)
+            patch_preview = (entry_dict.get("patch_applied") or "").strip()
             if len(patch_preview) > 500:
                 patch_preview = patch_preview[:500] + "\n... (truncated)"
             past_fixes.append(
-                f"### Past Fix {i} (decision={entry.decision}, "
-                f"retries={entry.retries_used})\n"
+                f"### Past Fix {i} {tag} "
+                f"(decision={entry_dict.get('decision')}, "
+                f"retries={entry_dict.get('retries_used', 0)})\n"
                 f"```diff\n{patch_preview}\n```"
             )
         sections.append("## Past Similar Fixes\n" + "\n\n".join(past_fixes))
-        log.info("context_builder.rag_hits", count=len(similar))
+        log.info("context_builder.rag_hits", count=len(rag_results))
     else:
         log.info("context_builder.rag_empty", signature=classifier_result.bug_signature)
 
