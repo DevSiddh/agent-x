@@ -15,7 +15,7 @@ FAILURE_CATEGORIES = (
     "BuildError",
 )
 
-DECISIONS = ("accepted", "rejected", "escalated", "abstained")
+DECISIONS = ("accepted", "rejected", "escalated", "abstained", "structural")
 
 
 @dataclass
@@ -40,8 +40,8 @@ class SyntheticCase:
         if not self.error_log:
             errors.append("error_log must not be empty")
         parts = self.bug_signature.split(":")
-        if len(parts) != 3:
-            errors.append(f"bug_signature must be ErrorType:keyword:file, got: {self.bug_signature}")
+        if len(parts) != 4:
+            errors.append(f"bug_signature must be repo:ErrorType:keyword:file (4 parts), got: {self.bug_signature}")
         return errors
 
 
@@ -65,7 +65,7 @@ def validate_jsonl_record(record: dict) -> list[str]:
 
     if "bug_signature" in record:
         parts = record["bug_signature"].split(":")
-        if len(parts) != 3:
-            errors.append(f"Invalid bug_signature format: {record['bug_signature']}")
+        if len(parts) != 4:
+            errors.append(f"Invalid bug_signature format (expected repo:ErrorType:keyword:file): {record['bug_signature']}")
 
     return errors

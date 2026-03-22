@@ -77,6 +77,7 @@ async def _reset_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repo_name TEXT NOT NULL,
                 run_id INTEGER NOT NULL,
+                run_attempt INTEGER NOT NULL DEFAULT 1,
                 workflow_name TEXT NOT NULL,
                 branch TEXT NOT NULL,
                 commit_sha TEXT NOT NULL,

@@ -4,6 +4,7 @@ Applies unified diff patches to fixture repos via subprocess git apply. (P1 — 
 All paths use pathlib.Path + cwd= param. (P16)
 """
 
+import ast
 import os
 import subprocess
 import sys
@@ -101,9 +102,35 @@ def apply_patch(patch_diff: str, fixture_path: Path) -> ApplyResult:
     )
 
 
+def check_syntax(fixture_path: Path, affected_file: str) -> str | None:
+    """
+    For .py files only: parse with ast.parse() after patch applied.
+    Returns error string if SyntaxError, None if clean.
+    Costs $0, runs in <1ms — call before pytest to avoid spinning up full suite.
+    """
+    if not affected_file.endswith(".py"):
+        return None
+    target = fixture_path / affected_file
+    if not target.exists():
+        return None
+    try:
+        ast.parse(target.read_text(encoding="utf-8"))
+        return None
+    except SyntaxError as exc:
+        log.warning(
+            "runner.syntax_error",
+            file=affected_file,
+            line=exc.lineno,
+            msg=exc.msg,
+        )
+        return f"SyntaxError line {exc.lineno}: {exc.msg}"
+
+
 def rollback(fixture_path: Path) -> None:
     """
-    Restore fixture to last committed state via git checkout -- .
+    Restore fixture to last committed state.
+    git checkout -- . restores tracked files.
+    git clean -fd removes untracked files/dirs from failed patches.
 
     Args:
         fixture_path: Path to the fixture git repo.
@@ -111,6 +138,11 @@ def rollback(fixture_path: Path) -> None:
     fixture_path = Path(fixture_path).resolve()
     subprocess.run(
         ["git", "checkout", "--", "."],
+        cwd=fixture_path,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "clean", "-fd"],
         cwd=fixture_path,
         capture_output=True,
     )

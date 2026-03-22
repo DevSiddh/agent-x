@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS webhook_queue (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     repo_name     TEXT    NOT NULL,
     run_id        INTEGER NOT NULL,
+    run_attempt   INTEGER NOT NULL DEFAULT 1,
     workflow_name TEXT    NOT NULL,
     branch        TEXT    NOT NULL,
     commit_sha    TEXT    NOT NULL,
@@ -63,6 +64,7 @@ async def init_db() -> None:
 async def enqueue(
     repo_name: str,
     run_id: int,
+    run_attempt: int,
     workflow_name: str,
     branch: str,
     commit_sha: str,
@@ -78,10 +80,10 @@ async def enqueue(
         cursor = await db.execute(
             """
             INSERT INTO webhook_queue
-                (repo_name, run_id, workflow_name, branch, commit_sha, event_ts)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (repo_name, run_id, run_attempt, workflow_name, branch, commit_sha, event_ts)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (repo_name, run_id, workflow_name, branch, commit_sha, event_ts),
+            (repo_name, run_id, run_attempt, workflow_name, branch, commit_sha, event_ts),
         )
         await db.commit()
         row_id: int = cursor.lastrowid  # type: ignore[assignment]
@@ -149,6 +151,7 @@ async def webhook(request: Request) -> Response:
     # 4 — Extract fields
     repo_name: str     = payload.get("repository", {}).get("full_name", "unknown")
     run_id: int        = int(workflow.get("id", 0))
+    run_attempt: int   = int(workflow.get("run_attempt", 1))
     workflow_name: str = workflow.get("name", "unknown")
     branch: str        = workflow.get("head_branch", "unknown")
     commit_sha: str    = workflow.get("head_sha", "unknown")
@@ -158,6 +161,7 @@ async def webhook(request: Request) -> Response:
     await enqueue(
         repo_name=repo_name,
         run_id=run_id,
+        run_attempt=run_attempt,
         workflow_name=workflow_name,
         branch=branch,
         commit_sha=commit_sha,

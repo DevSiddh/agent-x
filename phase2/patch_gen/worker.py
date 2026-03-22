@@ -7,7 +7,9 @@ DeepSeek patch generator with retry logic.
 """
 
 import os
+import random
 import sys
+import time
 from pathlib import Path
 
 import structlog
@@ -189,6 +191,8 @@ def generate_patch(
             reason=last_result.rejection_reason,
             line_count=last_result.line_count,
         )
+        wait = min(2 ** attempt + random.uniform(0, 1), 60)
+        time.sleep(wait)
 
     raise RuntimeError(
         f"All {MAX_RETRIES} attempts exhausted. "

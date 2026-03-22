@@ -68,8 +68,15 @@ def init_dedup_db() -> None:
     log.info("webhook_worker.dedup_db_ready", path=str(db_path))
 
 
-# ── Initialise dedup table on import ──────────────────────────────────────────
-init_dedup_db()
+_dedup_db_initialised = False
+
+
+def _ensure_dedup_db() -> None:
+    """Lazy initialiser — call once on first use, not at import time."""
+    global _dedup_db_initialised
+    if not _dedup_db_initialised:
+        init_dedup_db()
+        _dedup_db_initialised = True
 
 
 # ── Filter ────────────────────────────────────────────────────────────────────
@@ -180,10 +187,12 @@ def process_next() -> MemoryEntry | None:
     and return a MemoryEntry. Returns None if queue is empty, event is filtered,
     or already processed.
     """
+    _ensure_dedup_db()
+
     # 1 — Dequeue (mark as processing to prevent double-pickup)
     conn = sqlite3.connect(str(_queue_db_path()))
     row = conn.execute(
-        "SELECT id, repo_name, run_id FROM webhook_queue "
+        "SELECT id, repo_name, run_id, run_attempt FROM webhook_queue "
         "WHERE status='pending' ORDER BY id LIMIT 1"
     ).fetchone()
 
@@ -192,14 +201,12 @@ def process_next() -> MemoryEntry | None:
         log.info("webhook_worker.queue_empty")
         return None
 
-    row_id, repo, run_id = row
+    row_id, repo, run_id, run_attempt = row
     conn.execute(
         "UPDATE webhook_queue SET status='processing' WHERE id=?", (row_id,)
     )
     conn.commit()
     conn.close()
-
-    run_attempt = 1  # run_attempt not stored in queue schema — default to 1
     log.info("webhook_worker.dequeued", repo=repo, run_id=run_id, row_id=row_id)
 
     # 2 — Filter check (server pre-filters but guard defensively)

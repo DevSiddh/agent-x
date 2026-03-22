@@ -53,7 +53,7 @@ _PATTERNS: dict[str, list[_Pattern]] = {
         _Pattern(re.compile(r"protected.namespace.*model_", re.I), "pydantic_namespace", 0.70),
         _Pattern(re.compile(r"PydanticUserError", re.I), "pydantic_error", 0.60),
         _Pattern(re.compile(r"AssertionError", re.I), "assertion_error", 0.90),
-        _Pattern(re.compile(r"assert.*failed|assertion failed", re.I), "assertion_error", 0.09),
+        _Pattern(re.compile(r"assert.*failed|assertion failed", re.I), "assertion_error", 0.70),
         _Pattern(re.compile(r"TypeError", re.I), "type_error", 0.50),
         _Pattern(re.compile(r"TypeError:.*argument", re.I), "type_error", 0.40),
         _Pattern(re.compile(r"ValueError", re.I), "value_error", 0.40),
@@ -167,6 +167,47 @@ def classify(error_lines: list[str], repo: str) -> ClassifierResult:
         repo=repo,
     )
 
+    return result
+
+
+def classify_with_fallback(
+    error_lines: list[str],
+    repo: str,
+) -> ClassifierResult:
+    """
+    Two-pass classifier chain:
+      Pass 1: regex classify() — always runs, $0, microseconds, deterministic
+      Pass 2: EmbeddingClassifier.classify() — only if regex confidence < 0.85
+
+    Returns ClassifierResult from whichever pass succeeds.
+    Falls through to original low-confidence result if embedding also fails.
+    Never raises.
+    """
+    result = classify(error_lines, repo=repo)
+    if result.confidence >= 0.85:
+        return result  # regex passed — fast path, no embedding needed
+
+    log.info(
+        "classifier.regex_miss",
+        confidence=result.confidence,
+        triggering_semantic_fallback=True,
+    )
+    try:
+        from phase2.classifier.semantic_fallback import EmbeddingClassifier
+        engine = EmbeddingClassifier()
+        semantic_result = engine.classify(error_lines, repo=repo)
+        if semantic_result is not None:
+            log.info(
+                "classifier.semantic_hit",
+                category=semantic_result.category,
+                confidence=semantic_result.confidence,
+            )
+            return semantic_result
+    except Exception as exc:
+        log.warning("classifier.semantic_error", error=str(exc))
+
+    # Both passes failed — return original low-confidence result.
+    # PreSafetyGate will catch it and set observer mode.
     return result
 
 

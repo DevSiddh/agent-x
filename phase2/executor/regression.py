@@ -62,6 +62,9 @@ def parse_report(report_path: Path, runner: str) -> tuple[list[str], int]:
             if test.get("outcome") == "failed":
                 failed.append(test.get("nodeid", "unknown"))
 
+    else:
+        log.warning("regression.unknown_report_format", runner=runner, keys=list(data.keys()))
+
     return failed, total
 
 
@@ -131,10 +134,9 @@ def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
     Returns:
         TestReport — note="flaky" if any run failed.
     """
-    last_report = TestReport(passed=False, failed_tests=[], total=0, exit_code=1, raw="")
+    last_passing: TestReport | None = None
     for i in range(runs):
         report = run_tests(fixture_path)
-        last_report = report
         if not report.passed:
             log.warning(
                 "executor.flaky",
@@ -150,7 +152,10 @@ def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
                 raw=report.raw,
                 note="flaky",
             )
-    return last_report
+        last_passing = report
+    # last_passing is non-None: all `runs` iterations passed
+    assert last_passing is not None
+    return last_passing
 
 
 def check_regression(before: TestReport, after: TestReport) -> bool:

@@ -89,7 +89,9 @@ def _fix_no_such_table(_error_lines: list[str], fixture_path: Path) -> str | Non
     Add Base.metadata.create_all(engine) after engine creation in database setup file.
     Source: 13x in memory — ConfigError:no_such_table pattern.
     """
-    for py_file in sorted(fixture_path.rglob("*.py")):
+    max_depth = 3
+    for py_file in sorted(p for p in fixture_path.rglob("*.py")
+                          if len(p.relative_to(fixture_path).parts) <= max_depth):
         content = py_file.read_text(encoding="utf-8")
         if "create_engine" not in content:
             continue
@@ -113,7 +115,9 @@ def _fix_pydantic_namespace(_error_lines: list[str], fixture_path: Path) -> str 
     Add model_config = ConfigDict(protected_namespaces=()) to Pydantic BaseModel classes.
     Source: 12x in memory — RuntimeError:pydantic_namespace pattern.
     """
-    for py_file in sorted(fixture_path.rglob("*.py")):
+    max_depth = 3
+    for py_file in sorted(p for p in fixture_path.rglob("*.py")
+                          if len(p.relative_to(fixture_path).parts) <= max_depth):
         content = py_file.read_text(encoding="utf-8")
         if "BaseModel" not in content:
             continue

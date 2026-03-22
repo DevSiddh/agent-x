@@ -112,7 +112,7 @@ class TestDatasetSchema:
             "error_log": ["ModuleNotFoundError: No module named 'pkg_resources'"],
             "expected_fix": "pip install setuptools",
             "expected_patch": "--- a/req.txt\n+++ b/req.txt\n@@ -1 +1,2 @@\n+setuptools",
-            "bug_signature": "DependencyError:pkg_resources:requirements.txt",
+            "bug_signature": "synthetic:DependencyError:pkg_resources:requirements.txt",
         }
 
     def test_valid_record_passes(self):

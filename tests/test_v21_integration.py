@@ -42,6 +42,7 @@ def isolated_dbs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             repo_name     TEXT NOT NULL,
             run_id        INTEGER NOT NULL,
+            run_attempt   INTEGER NOT NULL DEFAULT 1,
             workflow_name TEXT NOT NULL DEFAULT '',
             branch        TEXT NOT NULL DEFAULT '',
             commit_sha    TEXT NOT NULL DEFAULT '',
@@ -56,12 +57,12 @@ def isolated_dbs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     init_dedup_db()
 
 
-def _enqueue(tmp_path: Path, repo: str, run_id: int) -> None:
+def _enqueue(tmp_path: Path, repo: str, run_id: int, run_attempt: int = 1) -> None:
     queue_db = tmp_path / "queue.db"
     conn = sqlite3.connect(str(queue_db))
     conn.execute(
-        "INSERT INTO webhook_queue (repo_name, run_id) VALUES (?, ?)",
-        (repo, run_id),
+        "INSERT INTO webhook_queue (repo_name, run_id, run_attempt) VALUES (?, ?, ?)",
+        (repo, run_id, run_attempt),
     )
     conn.commit()
     conn.close()

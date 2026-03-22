@@ -78,8 +78,11 @@ def test_gateway_extracts_top_level_package():
 # Pipeline integration tests
 # ---------------------------------------------------------------------------
 
-def test_pipeline_gateway_hit_skips_context_builder(monkeypatch):
+def test_pipeline_gateway_hit_skips_context_builder(monkeypatch, tmp_path):
     """Gateway hit + tests pass → accepted with model_used='gateway', ContextBuilder never called."""
+    import phase2.memory.store as mem_store
+    monkeypatch.setattr(mem_store, "_memory_path", lambda: tmp_path / "memory.jsonl")
+
     from phase2.executor.regression import TestReport
     from phase2.executor.runner import ApplyResult
     from phase2 import pipeline
@@ -112,8 +115,11 @@ def test_pipeline_gateway_hit_skips_context_builder(monkeypatch):
     assert len(ctx_calls) == 0  # ContextBuilder never called
 
 
-def test_pipeline_gateway_tests_fail_falls_through(monkeypatch):
+def test_pipeline_gateway_tests_fail_falls_through(monkeypatch, tmp_path):
     """Gateway hit but tests fail → pipeline falls through to full pipeline."""
+    import phase2.memory.store as mem_store
+    monkeypatch.setattr(mem_store, "_memory_path", lambda: tmp_path / "memory.jsonl")
+
     from phase2.executor.regression import TestReport
     from phase2 import pipeline
 
@@ -158,7 +164,7 @@ def test_pipeline_gateway_tests_fail_falls_through(monkeypatch):
     )
     from phase2.executor.runner import ApplyResult
     monkeypatch.setattr("phase2.pipeline.generate_patch", lambda *a, **kw: mock_worker)
-    monkeypatch.setattr("phase2.pipeline.apply_patch", lambda *a, **kw: ApplyResult(success=True))
+    monkeypatch.setattr("phase2.pipeline.apply_patch", lambda *a, **kw: ApplyResult(success=True, stdout="", stderr="", error=""))
     monkeypatch.setattr("phase2.pipeline.check_regression", lambda *a, **kw: False)
 
     result = pipeline.run("syn_001")

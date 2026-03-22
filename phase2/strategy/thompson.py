@@ -60,21 +60,24 @@ class ThompsonSampler:
         )
         return value
 
-    def update(self, bug_signature: str, accepted: bool) -> None:
+    def update(self, bug_signature: str, accepted: bool, penalty: int = 1) -> None:
         """
         Update arm after observing outcome.
         accepted=True  → alpha += 1 (reward)
-        accepted=False → beta  += 1 (penalty)
+        accepted=False → beta  += penalty (default 1; structural uses 5)
+        penalty=5 for structural decisions — hard wall, not a bad guess.
+        β+5 means same signature auto-escalates next time at zero API cost.
         """
         arm = self._get_or_create(bug_signature)
         if accepted:
             arm["alpha"] += 1
         else:
-            arm["beta"] += 1
+            arm["beta"] += penalty
         log.info(
             "thompson.updated",
             bug_signature=bug_signature,
             accepted=accepted,
+            penalty=penalty,
             alpha=arm["alpha"],
             beta=arm["beta"],
         )

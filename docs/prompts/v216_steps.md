@@ -3,6 +3,125 @@
 
 ---
 
+## STEP AUDIT — Audit Bug Fixes (run before C3b)
+# Prerequisite: C3 DONE.
+# Source: Full codebase audit 2026-03-22 — 30 issues found, fix critical+high first.
+
+```
+You are fixing critical and high-severity bugs found in the 2026-03-22 audit.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Do NOT add features. Only fix the listed bugs. Run full test suite after each fix.
+
+FIX 1 — regex_pass.py — fix assertion_error weights (two patterns, different weights)
+File: phase2/classifier/regex_pass.py
+Line 55: _Pattern(r"AssertionError") → weight must be 0.90 (exact exception class, high fidelity)
+Line 56: _Pattern(r"assert.*failed|assertion failed") → weight must be 0.70 (noisy signal, NOT 0.90)
+Why 0.70 not 0.90: enterprise logs contain "assertion failed" in passing test output.
+0.70 = corroborating signal only — cannot trigger pipeline alone (gate is 0.85).
+0.90 = execution trigger — fires on noisy logs = false positives on real repos.
+Change line 56 from 0.09 → 0.70. Run tests.
+
+FIX 2 — schema.py + pipeline.py — structural decision + Thompson heavy penalty
+File 1: phase1/dataset/schema.py line 18
+  Add "structural" to DECISIONS tuple:
+  DECISIONS = ("accepted", "rejected", "escalated", "abstained", "structural")
+
+File 2: phase2/pipeline.py — Thompson update on structural
+  Current: rejected → Thompson.update(arm, reward=0) → β+1
+  Add:     structural → Thompson.update(arm, reward=0, penalty=5) → β+5
+  Why: structural is a hard wall, not a bad guess. β+5 means next time the same
+  bug signature appears → system instantly escalates, zero API cost.
+  If ThompsonSampler.update() doesn't support penalty param → add it:
+    def update(self, arm: str, reward: int, penalty: int = 1) -> None:
+        self.arms[arm] = (alpha + reward, beta + penalty)
+
+  Note: DO NOT open GitHub issues here — that is Step D1's job.
+  Here: only schema fix + Thompson penalty. Keep scope tight.
+Run tests.
+
+FIX 3 — similarity.py — log before swallowing exceptions
+File: phase2/memory/similarity.py lines 76, 136
+Every bare `except Exception:` must log before returning.
+Pattern: log.error("similarity.failed", error=str(e)) before return []
+Run tests.
+
+FIX 4 — webhook_worker.py — run_attempt hardcoded to 1
+File: phase3/webhook_worker.py line 202
+Extract run_attempt from the webhook payload stored in queue row.
+Update queue schema if needed to store run_attempt at enqueue time.
+Run tests.
+
+FIX 5 — regression.py — flaky detection returns wrong result
+File: phase2/executor/regression.py lines 135-152
+run_tests_stable() must return the LAST PASSING report, not the last run.
+Fix the return logic: track which run passed all 3, return that report.
+Run tests.
+
+FIX 6 — webhook_worker.py — init_dedup_db at module level
+File: phase3/webhook_worker.py line 72
+Move init_dedup_db() call inside process_next() or a lazy initializer.
+Pattern: call once on first use, not at import time.
+Run tests.
+
+FIX 7 — schema.py — bug_signature format mismatch
+File: phase1/dataset/schema.py line 44
+Validation expects 3-part format. Real entries are 4-part (repo:ErrorType:keyword:file).
+Update validation to expect 4 parts. Run tests.
+
+FIX 8 — regression.py — unrecognized runner silently passes
+File: phase2/executor/regression.py lines 27-65
+If runner is not pytest or jest, parse_report currently returns ([], 0) silently.
+Add: log.warning("regression.unknown_runner", runner=runner) + raise ValueError or return clearly.
+Run tests.
+
+FIX 9 — pipeline.py — duplicate test run in memory reuse path
+File: phase2/pipeline.py line 267
+run_tests() called twice. Store result first call, pass stored result to check_regression.
+Run tests.
+
+FIX 10 — worker.py — add jitter to DeepSeek retry backoff
+File: phase2/patch_gen/worker.py
+Current retry loop has no jitter — concurrent workers all retry at same second → thundering herd.
+Add: wait = min(2 ** attempt + random.uniform(0, 1), 60)
+import random at top of file. Run tests.
+
+FIX 11 — gateway.py — rglob no depth limit on real repos
+File: phase2/gateway.py line 92
+Add max_depth=3 to rglob equivalent. Use os.walk with level counter or pathlib depth check.
+Run tests.
+
+FIX 12 — runner.py — no syntax check before pytest (Syntax Reflex)
+File: phase2/executor/runner.py
+After apply_patch() succeeds but BEFORE running pytest, add ast.parse() check for .py files only.
+Pattern:
+  if Path(affected_file).suffix == ".py":
+      try:
+          ast.parse(patched_file_path.read_text())
+      except SyntaxError as e:
+          rollback(fixture_path)
+          return ApplyResult(success=False, error=f"SyntaxError line {e.lineno}: {e.msg}")
+      # only then → run pytest
+Cost: $0, ~1ms. Saves running 323 tests for a dumb indentation error.
+import ast at top of file. Run tests.
+
+FIX 13 — runner.py — rollback() leaves untracked files (Amnesia Protocol)
+File: phase2/executor/runner.py line 104
+Current rollback() uses `git checkout -- .` — restores tracked files only.
+If a failed patch creates new untracked files, they survive into the next retry.
+Add `git clean -fd` after `git checkout -- .`:
+  subprocess.run(["git", "checkout", "--", "."], cwd=fixture_path, ...)
+  subprocess.run(["git", "clean", "-fd"], cwd=fixture_path, capture_output=True)
+Every retry now runs against true HEAD — no Frankenstein state from previous attempt.
+Run tests.
+
+DONE WHEN:
+- pytest tests/ → all pass (zero regressions, count must not decrease)
+- All 13 fixes applied
+- docs/progress.md updated: Step AUDIT DONE
+```
+
+---
+
 ## STEP C3 — v2.1.6: Multi-Language Executor
 # Prerequisite: Step C2 DONE.
 
@@ -118,9 +237,42 @@ BUILD THIS STEP:
    - Test SQL errors classified correctly (3 cases)
    - Test Python errors still classified correctly (regression)
 
+3. phase2/executor/runner.py — replace extension map with manifest detection
+   REPLACE get_runner(affected_file) with detect_runner(fixture_path, affected_file):
+   - Walk UP from affected_file.parent to fixture_path (repo root)
+   - First manifest found = execution_root + runner command
+   - Manifest priority: package.json → pyproject.toml/pytest.ini → tox.ini → pom.xml → build.gradle → Makefile
+   - package.json: parse scripts.test, check yarn.lock for package manager
+   - Kill switch: if no manifest found → raise TestRunnerDetectionError
+     pipeline catches → decision="abstained", reason="no test runner detected"
+   - NEVER silent fallback to pytest — explicit failure > wrong runner
+
+   Signature change (breaking — update all callers):
+     OLD: get_runner(affected_file: str) -> list[str]
+     NEW: detect_runner(fixture_path: str, affected_file: str) -> tuple[list[str], Path]
+   Update apply_patch() to use execution_root as subprocess cwd (not fixture_path)
+
+4. phase2/strategy/thompson.py — arm migration + ecosystem naming
+   BREAKING CHANGE: rename all existing arms to Category_Ecosystem format
+   Migration function run once on startup if old format detected:
+   ```python
+   def _migrate_arms(arms: dict) -> dict:
+       # if arm has no underscore → add _Python suffix
+       return {
+           (k if "_" in k else f"{k}_Python"): v
+           for k, v in arms.items()
+       }
+   ```
+   Update sample() and update() to accept arm key as "{Category}_{Ecosystem}"
+   Classifier must pass ecosystem to pipeline → pipeline passes to Thompson
+   Ecosystem detection: Path(affected_file).suffix → _ECOSYSTEM_MAP
+   _ECOSYSTEM_MAP = {".py": "Python", ".js": "Node", ".ts": "Node",
+                     ".php": "PHP", ".java": "Java", default: "Python"}
+
 DONE WHEN:
 - pytest tests/ → all pass (zero regressions)
 - All 4 new language categories classified correctly
+- thompson_state.json arms all have Category_Ecosystem format
 - docs/progress.md updated: Step C3b DONE
 ```
 

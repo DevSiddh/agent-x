@@ -33,10 +33,10 @@ configure_logging()
 
 from agent_y.reasoner import ReasonerError, reason
 from phase1.log_fetcher.cleaner import clean_and_extract
-from phase2.classifier.regex_pass import ClassifierResult, classify
+from phase2.classifier.regex_pass import ClassifierResult, classify, classify_with_fallback
 from phase2.classifier.safety_gate import check as gate_check
 from phase2.executor.regression import TestReport, check_regression, run_tests, run_tests_stable
-from phase2.executor.runner import apply_patch, rollback
+from phase2.executor.runner import apply_patch, check_syntax, rollback
 from phase2.memory.store import MemoryEntry, append, build_default_entry
 from phase2.patch_gen.sanitiser import validate_patch
 from phase2.patch_gen.worker import generate_patch
@@ -207,7 +207,7 @@ def run(case_id: str) -> MemoryEntry:
             cleaned = error_lines  # fallback — use raw lines
 
         # 3 — RegexClassifier
-        classifier_result = classify(cleaned, repo=REPO)
+        classifier_result = classify_with_fallback(cleaned, repo=REPO)
         outcome = outcome.model_copy(update={
             "failure_category": classifier_result.category,
             "bug_signature": classifier_result.bug_signature,
@@ -264,7 +264,7 @@ def run(case_id: str) -> MemoryEntry:
             reuse_result = apply_patch(cached["patch"], fixture_path)
             if reuse_result.success:
                 after_reuse: TestReport = run_tests(fixture_path)
-                if not check_regression(run_tests(fixture_path), after_reuse):
+                if after_reuse.passed:
                     outcome = outcome.model_copy(update={
                         "patch_applied": cached["patch"],
                         "decision": "accepted",
@@ -332,6 +332,7 @@ def run(case_id: str) -> MemoryEntry:
                 reason="exceeded line limit on all retries",
             )
             outcome = outcome.model_copy(update={"decision": "structural"})
+            sampler.update(classifier_result.bug_signature, accepted=False, penalty=5)
             return outcome
 
         # 7.2 — Bandit security gate (PostSafetyValidation)
@@ -349,6 +350,7 @@ def run(case_id: str) -> MemoryEntry:
         if _radon_risk:
             log.warning("doctor.architecture_risk", case_id=case_id, complexity=_radon_risk)
             outcome = outcome.model_copy(update={"decision": "structural"})
+            sampler.update(classifier_result.bug_signature, accepted=False, penalty=5)
             return outcome
 
         # 8 — Executor: git apply
@@ -360,6 +362,18 @@ def run(case_id: str) -> MemoryEntry:
                 "decision": "rejected",
                 "sandbox_result": "fail",
                 "error": apply_result.error,
+            })
+            return outcome
+
+        # 8.5 — Syntax Reflex: ast.parse() for .py files before spinning up pytest
+        syntax_error = check_syntax(fixture_path, classifier_result.affected_file)
+        if syntax_error:
+            rollback(fixture_path)
+            log.warning("pipeline.syntax_error", case_id=case_id, error=syntax_error)
+            outcome = outcome.model_copy(update={
+                "decision": "rejected",
+                "sandbox_result": "fail",
+                "error": syntax_error,
             })
             return outcome
 
