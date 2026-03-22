@@ -83,7 +83,7 @@ class TestPipelineRun:
             mock_openai.return_value = client
 
             # Even on exception, finally block must write
-            with patch("phase2.pipeline.classify", side_effect=RuntimeError("boom")):
+            with patch("phase2.pipeline.classify_with_fallback", side_effect=RuntimeError("boom")):
                 entry = run("syn_001")
 
         assert patch_memory.exists(), "memory.jsonl must exist after run"
@@ -108,7 +108,7 @@ class TestPipelineRun:
             bug_signature="synthetic:DependencyError:test:requirements.txt",
         )
 
-        with patch("phase2.pipeline.classify", return_value=low_conf):
+        with patch("phase2.pipeline.classify_with_fallback", return_value=low_conf):
             entry = run("syn_001")
 
         assert entry.mode == "observer"
