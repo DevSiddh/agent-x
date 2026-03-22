@@ -392,3 +392,29 @@
   Cap total RAG section at 800 tokens regardless of limit to prevent overflow.
 - **Gate:** 200+ accepted runs (currently 101+)
 - **Status:** PENDING — monitor, raise when gate met
+
+---
+
+### P26 — Edge case tests missing (happy path only)
+- **Phase:** All / tests/
+- **Problem:** Most test files only test valid input → valid output. Production sends
+  malformed data, missing files, API failures. Nothing crashes in tests. Everything
+  crashes in prod. Found during 2026-03-22 blunders audit (B14).
+- **Which modules are highest risk:**
+  - phase2/patch_gen/worker.py — what if DeepSeek returns empty string?
+  - phase2/memory/store.py — what if memory.jsonl is corrupt/truncated?
+  - phase3/log_cleaner_real.py — what if log is binary or all whitespace?
+  - phase2/gateway.py — what if rules file is missing?
+- **Solution:** For every module, add at least one test per failure mode:
+  ```python
+  # 1. Missing input
+  def test_worker_empty_response(): ...
+  # 2. Malformed input
+  def test_cleaner_binary_log(): ...
+  # 3. External call fails
+  def test_worker_api_timeout(): ...
+  # 4. Write to disk fails
+  def test_store_disk_full(tmp_path): ...
+  ```
+- **When:** Audit tests/ before Step D0 — 1 session, no new modules needed
+- **Status:** PENDING

@@ -16,10 +16,32 @@
 - **Why dangerous:** No semantic correctness check. Only test pass/fail. Tests can be incomplete.
 - **Current mitigation:** Multi-run verification (3x) in regression.py — flaky fixes rejected
 - **Gap:** Structural correctness not checked — patch can pass tests but degrade code quality
-- **Solution path:** Agent-Y self-review at v3.0 — reasons about patch before accepting
-  Intermediate fix: add `radon` complexity check (already in C1) — reject patches that
-  increase cyclomatic complexity beyond threshold
-- **Status:** PARTIALLY MITIGATED — full fix at v3.0
+- **Concrete solution: Two-layer deterministic verification — both in regression.py, $0 cost**
+
+  Layer 1 — Negative Test Check (stops placebo patches):
+  ```
+  Step 1 — Verify failure:    run specific failing test on BROKEN code → must FAIL
+                               if it passes → test is weak → escalate to human, reject patch
+  Step 2 — Verify fix:        run specific failing test on PATCHED code → must PASS
+  Step 3 — Verify regression: run full suite → no new failures
+  ```
+
+  Layer 2 — Shadow Type Check (stops type contract violations):
+  ```bash
+  python -m mypy --check-untyped-defs {patched_file} --no-error-summary
+  ```
+  Catches: `return True` when function is annotated `-> float`, wrong return types,
+  broken interfaces. One subprocess call. Works in pipeline and extension context.
+  Limitation: only applies to codebases with type annotations — partial coverage,
+  still better than nothing. Skip silently if mypy not installed.
+
+  Rejected approaches:
+  - Property fuzzing (hypothesis/atheris) — heavy, narrow, only pure functions
+  - Agent-Y self-review — subjective, expensive, v3.0 only if these two are insufficient
+  - Docstring contract check — most real repos have no doctest examples
+
+- **Build at:** D0 — both layers go into regression.py, no new dependencies beyond mypy
+- **Status:** SOLUTION LOCKED — implement both layers at D0
 
 ---
 
@@ -82,10 +104,13 @@
   e.g. hardcodes a value instead of fixing the root cause
 - **Examples:** `return True` instead of fixing the actual logic
 - **Solution path:**
-  - Short term: Bandit security scan (already in C1) catches unsafe patterns
-  - Medium term: Agent-Y reviews diff before accepting ("does this make sense?")
-  - Long term: Property-based testing + mutation testing
-- **Status:** PARTIALLY MITIGATED (Bandit) — full fix at v3.0
+  - Done: Bandit security scan (C1) — catches unsafe patterns
+  - Done: Multi-run verification (C1) — rejects flaky fixes
+  - Next: Negative Test Check (see R1) — deterministic, $0, implement at D0
+  - Rejected: Property-based testing (Hypothesis) — we fix other people's repos, can't add their tests
+  - Rejected: Docstring contract check (doctest) — most real repos have no doctest examples
+  - Deferred: Agent-Y self-review — subjective, expensive, v3.0 only if Negative Test Check insufficient
+- **Status:** SOLUTION LOCKED — Negative Test Check at D0 closes this
 
 ---
 
@@ -108,6 +133,22 @@
   → wrong file paths, missed imports, incorrect module references
 - **Solution:** File tree reader (Step D0, item 1) — passes directory structure to Agent-Y
 - **Status:** PLANNED — Step D0
+
+---
+
+### L5a — Classifier pattern weights: strict vs noisy signals (locked 2026-03-22)
+- **Rule:** Regex patterns fall into two classes — never mix their weights
+  ```
+  Strict signal  → exact exception class name (AssertionError, ModuleNotFoundError)
+                 → weight 0.85–0.99 — can trigger pipeline alone
+  Noisy signal   → human-readable phrases ("assert.*failed", "connection refused")
+                 → weight 0.60–0.75 — corroborating only, cannot trigger alone
+  ```
+- **Why:** Enterprise CI logs contain "assertion failed" in passing test output,
+  health checks, middleware logs. A 0.90 weight on a noisy pattern = false positives
+  on real repos. A noisy pattern at 0.70 needs other evidence to cross the 0.85 gate.
+- **Applied:** AssertionError=0.90 (strict), assert.*failed=0.70 (noisy)
+- **Status:** RULE LOCKED — apply to every new pattern added to regex_pass.py
 
 ---
 
@@ -154,20 +195,121 @@
 
 ### I2 — No monitoring (pipeline failures are silent)
 - **What happens:** webhook_worker.py crashes silently → queue fills up → nothing processed
-- **Solution:** Heartbeat log every 60s + alert if no runs processed in 30 mins
-  Simple: write last_run_at to a file → check it on startup
-- **Status:** PENDING — low priority until running 24/7
+  OOM kill, server reboot, infinite retry loop — all fail silently, no alert, no log
+- **Concrete solution: Inverted Monitoring Stack (3 layers, ~6 lines of code)**
+
+  Layer 1 — NSSM (Windows OS daemon):
+  Wraps runner.py as a Windows service. OS restarts it on crash or reboot.
+  Equivalent to systemd on Linux. Free, 1 config file.
+  `nssm install agent-x-runner python runner.py`
+
+  Layer 2 — Healthchecks.io (Dead Man's Switch):
+  runner.py pings a URL at end of every successful poll loop.
+  If pings stop (OOM, crash, infinite loop) → healthchecks.io emails you.
+  ```python
+  if HEALTHCHECK_URL:
+      requests.get(HEALTHCHECK_URL, timeout=5)
+  ```
+
+  Layer 3 — ntfy.sh (1-line push alert for fatal errors):
+  GitHub token expired, DeepSeek down, queue locked → phone notification instantly.
+  No auth required. Replace with Telegram bot at v3.2.
+  ```python
+  def alert(msg: str) -> None:
+      if NTFY_TOPIC:
+          requests.post(f"https://ntfy.sh/{NTFY_TOPIC}", data=msg, timeout=5)
+  ```
+
+  Add to .env: HEALTHCHECK_URL, NTFY_TOPIC
+  Add to .env.example: same keys, empty values
+
+- **Gate:** Build when running 24/7 (not needed for dev sessions)
+- **Status:** SOLUTION LOCKED — validated by Gemini
 
 ---
 
-### I3 — Thompson cold start on new error categories
-- **What happens:** New category seen for first time → Beta(1,1) → random strategy
-  → first 5-10 runs are essentially guesses
+### I2b — Thompson update strategy per decision type (locked 2026-03-22)
+- **Rule:** Different decisions carry different penalties — never treat all failures equally
+  ```
+  accepted    → update(reward=1)      → α+1  — strategy works, reinforce
+  rejected    → update(reward=0)      → β+1  — bad patch, try different strategy
+  abstained   → no update             → —    — no signal, don't learn from noise
+  structural  → update(reward=0, penalty=5) → β+5  — hard wall, stop wasting tokens
+  ```
+- **Why β+5 on structural:**
+  structural = architectural limit, not a bad guess. Treating it like rejected (β+1)
+  wastes 3 retries on strategies that will all hit the same wall.
+  β+5 means next time the same bug_signature appears → low Thompson score →
+  system escalates instantly → zero API cost → human gets it immediately.
+- **Build at:** Step AUDIT (penalty param) + Step D1 (GitHub issue on structural)
+- **Status:** SOLUTION LOCKED
+
+---
+
+### I3 — Thompson cold start + arm explosion at enterprise scale
+- **What happens:** New category/language seen → Beta(1,1) → random strategy
+  Naive fix: multiply all dimensions → arm explosion → permanent cold start
 - **Current mitigation:** Confidence gate (0.85) blocks low-confidence classifications
 - **Gap:** Correct classification + wrong strategy = bad fix + memory poisoning
-- **Solution:** Seed new categories with prior from similar categories
-  e.g. new "ImportError" category seeds from "DependencyError" prior
-- **Status:** PENDING — build when 3+ new categories emerge
+
+- **Concrete solution: Context-Factored Arms + Hierarchical Prior Seeding + Linear Fade**
+
+  PART 1 — Arm naming convention (Category × Ecosystem):
+  ```
+  Arms = "{Category}_{Ecosystem}"
+  e.g.  DependencyError_Python, DependencyError_Node, RuntimeError_Java
+  ~30 arms total (10 categories × 3 ecosystems) — trivial convergence
+  Exclude: repo size (handled by 15-line structural cap), framework, file size
+  ```
+  BREAKING CHANGE at C3b: migrate existing arms:
+  ```
+  "DependencyError" → "DependencyError_Python"
+  "RuntimeError"    → "RuntimeError_Python"
+  (all existing arms get _Python suffix — migration script required)
+  ```
+
+  PART 2 — Seeding new arms (two scenarios, different decay factors):
+  ```python
+  SIMILAR_CATEGORY = {
+      "ImportError": "DependencyError", "ModuleNotFoundError": "DependencyError",
+      "AttributeError": "RuntimeError",  "TypeError": "RuntimeError",
+      "KeyError": "ConfigError",         "ValueError": "ConfigError",
+  }
+  BURN_IN = 10
+
+  def seed_new_arm(arm_key, arms, global_stats):
+      category, ecosystem = arm_key.split("_", 1)
+
+      # Scenario A: new language for known category
+      # e.g. DependencyError_Node, DependencyError_Python exists
+      known_sibling = f"{category}_Python"
+      if known_sibling in arms:
+          a, b = arms[known_sibling]
+          return (a * 0.25, b * 0.25)    # 25% — harder boundary than category similarity
+
+      # Scenario B: new category — use similar category in same ecosystem
+      similar_cat = SIMILAR_CATEGORY.get(category)
+      if similar_cat:
+          sibling = f"{similar_cat}_{ecosystem}"
+          if sibling in arms:
+              a, b = arms[sibling]
+              return (a * 0.50, b * 0.50)  # 50% — same ecosystem, related category
+
+      # Scenario C: global category average × 0.25
+      if global_stats:
+          return (global_stats.avg_success * 0.25 * 2,
+                  global_stats.avg_failure * 0.25 * 2)
+      return (2.0, 1.0)
+
+  def blended_sample(arm, seed, n_attempts):
+      if n_attempts >= BURN_IN:
+          return arm
+      weight = 1 - (n_attempts / BURN_IN)
+      return (arm.alpha + seed.alpha * weight, arm.beta + seed.beta * weight)
+  ```
+
+- **Build at:** C3b (when multi-language lands — arm migration happens here)
+- **Status:** SOLUTION LOCKED — validated Claude + Gemini independently
 
 ---
 
@@ -196,6 +338,18 @@
   Match #2-7 → diff + bug_signature only
   ```
 - **Gate:** Build when RAG limit raised above 7 (after 200+ accepted runs)
+
+---
+
+### S0 — memory.jsonl concurrent write corruption
+- **What happens:** Multiple workers append to memory.jsonl simultaneously
+  → interleaved bytes → invalid JSON lines → memory store broken silently
+- **Current state:** Single poll loop = safe right now. Breaks when parallel workers added.
+- **Solution:** SQLite memory_buffer table → single-threaded flush every 60s
+  Workers INSERT into SQLite (handles locking automatically)
+  runner.py flushes buffer → appends to memory.jsonl → deletes flushed rows
+- **Gate:** Build when adding multiple concurrent workers (not urgent now)
+- **Status:** SOLUTION LOCKED — see architecture_decisions.md D13
 
 ---
 

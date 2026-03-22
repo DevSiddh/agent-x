@@ -102,6 +102,24 @@ Before building the planning loop, we need to prove:
 }
 ```
 
+### Agent-Y Task Schema (updated — Atomic Change Set, locked 2026-03-22)
+```json
+{
+  "task_id": "T2",
+  "description": "Fix missing interface implementation",
+  "files_to_change": ["auth.py", "auth_impl.py", "test_auth.py"],
+  "patch_order": ["auth.py", "auth_impl.py", "test_auth.py"],
+  "max_total_lines": 50,
+  "acceptance_criteria": ["test_auth_validates_token passes"],
+  "depends_on": ["T1"],
+  "status": "pending"
+}
+```
+Caps: 1-5 files, 15 lines per file patch, 50 lines total.
+Rollback: git reset --hard HEAD (all files) — never partial.
+See docs/architecture_decisions.md D11 for full design.
+```
+
 ### The Orchestrator Loop
 ```python
 while not is_done(state):

@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v2.1.6 IN PROGRESS — 2026-03-22 — C3 DONE. Next: C3b (multi-language classifier)
+## Overall Status: v2.1.6 IN PROGRESS — 2026-03-22 — RAG + CLS + P23 DONE. Next: E1 → C3b → C4 → D0 → D1 → E0 → E2
 
 ---
 
@@ -359,7 +359,8 @@ Executor runs correct test runner per language. Classifier recognises JS/PHP/Jav
 
 | Step | Description | Status |
 |------|-------------|--------|
-| Step C3 | Multi-language executor — jest/vitest/phpunit/junit per file extension | PENDING |
+| Step C3 | Multi-language executor — jest/vitest/phpunit/junit per file extension | DONE |
+| Step AUDIT | 13 fixes: 11 audit bugs + Syntax Reflex (FIX 12) + Amnesia Protocol (FIX 13) | DONE — 2026-03-22 |
 | Step C3b | Multi-language classifier + log cleaner patterns (JS/PHP/Java/SQL) | PENDING |
 | Step C4 | Playwright visual validation — gated by file extension | PENDING |
 
@@ -372,6 +373,30 @@ Executor runs correct test runner per language. Classifier recognises JS/PHP/Jav
 | Playwright visual check | System no longer blind to UI regressions |
 | Radon complexity check (in C1) | Catches architecture risk, not just line count |
 | pytesseract OCR (v3.2) | Screenshots/images → text, no second LLM needed |
+
+---
+
+---
+
+## v2.3 — Analytics Layer (PENDING — after D1)
+
+### v2.3 Done Condition
+Dashboard shows live pipeline stats. Rejection patterns identified and classified. Cross-repo patterns auto-detected for gateway promotion.
+
+### v2.3 Status Tracker
+
+| Step | Description | Cost | Status |
+|------|-------------|------|--------|
+| Step E0 | Streamlit dashboard — run summary, Thompson scores, cost saved | $0 | PENDING |
+| Step E1 | Failure learning — classify rejection reasons, identify top fix direction | $0 | PENDING |
+| Step E2 | Cross-repo pattern detection — auto-generate gateway rule candidates | $0 | PENDING (gate: 3+ repos) |
+
+### What these steps add
+| Upgrade | Solves |
+|---------|--------|
+| Dashboard | Visibility into what's working — no more blind operation |
+| Failure learning | Know which pipeline stage to improve (prompt vs context vs logic) |
+| Cross-repo detection | Self-improving gateway — more patterns = more zero-cost fixes |
 
 ---
 
@@ -479,6 +504,140 @@ Memory stats: 101+ accepted — C2 gate (≥3 same sig) UNLOCKED — v2.2 gate (
 Last test run: 2026-03-22
 ```
 304 passed, 2 warnings in 75.41s
+```
+
+---
+
+## Step RAG — v2.1 RAG Upgrade: Triple-Hybrid Semantic Search (PENDING — after AUDIT)
+
+### RAG v2.1 Done Condition
+TF-IDF + jina-dense + Thompson triple hybrid active. Context injection uses action-tagged
+entries. Agent-Y never receives low-quality RAG (score < 0.55). Δ monitoring live.
+
+### RAG v2.1 Status
+
+| Step | Description | Status |
+|------|-------------|--------|
+| Step RAG | triple hybrid + find_for_rag() + action tags + Δ monitoring | DONE — 2026-03-22 |
+| Step RAG-NEG | Negative RAG / Autopsy Protocol | PENDING (gate: 10+ test_failure rejections) |
+
+### Architecture (locked 2026-03-22 — full Gemini review)
+| Component | Decision |
+|-----------|----------|
+| Embedding model | jinaai/jina-embeddings-v2-small-code (code-specific, not all-MiniLM) |
+| Thaw template | "{category} ({matched_pattern}) involving {keyword} in file {affected_file}" |
+| Weights | 0.30 TF-IDF + 0.45 jina-dense + 0.25 Thompson (fixed until n=500 + Δ signal) |
+| TF-IDF | KEPT as exact-match anchor |
+| Tier 1 bypass | ≥ 0.85 → skip Agent-Y, auto-apply (find_similar — unchanged) |
+| Tier 2 HIGH tag | 0.70–0.84 → [HIGH RELEVANCE: Adapt this pattern] |
+| Tier 3 LOW tag | 0.55–0.69 → [LOW RELEVANCE: Loose inspiration only. DO NOT copy directly.] |
+| Tier 4 zero RAG | < 0.55 → nothing injected — Agent-Y reasons cold |
+| Max injected | 3 entries cap (find_for_rag — new method) |
+| Monitoring | Δ = S_dense - S_tfidf logged per scored entry |
+| Scale limit | n=500 + repeated Δ>0.40 on failures → manual weight review |
+
+### Parked (post-RAG, data-gated)
+| Item | Gate | Target step |
+|------|------|-------------|
+| Negative RAG (Autopsy) | 10+ test_failure rejections | Step RAG-NEG |
+| Web fallback (FinalScore < 0.55 → web search) | D0 ready | Step D0 (added to prompt) |
+| AST Graph RAG (cross-file ImportError/TypeError) | 10+ multi-file escalations | Step D0.5 |
+
+---
+
+## Step CLS — Embedding Classifier Fallback (DONE — 2026-03-22)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/classifier/semantic_fallback.py | DONE | PASS | EmbeddingClassifier, build_centroids(), classify() |
+| phase2/classifier/regex_pass.py | DONE | PASS | classify_with_fallback() added below classify() |
+| phase2/pipeline.py | DONE | PASS | 1 line: classify → classify_with_fallback |
+| tests/test_embedding_classifier.py | DONE | 13 passed | model unavailable, no centroids, floor, clear winner, cap, skip |
+| tests/test_pipeline.py | DONE | PASS | 2 tests updated to patch classify_with_fallback |
+
+Last test run: 2026-03-22
+```
+363 passed, 3 warnings in 270.36s
+```
+
+Architecture (locked):
+- Pass 1: RegexClassifier — always runs, $0, microseconds, 100% deterministic
+- Pass 2: EmbeddingClassifier — ONLY when regex confidence < 0.85
+- Gate: same 0.85 PreSafetyGate — unchanged
+- Model: jinaai/jina-embeddings-v2-small-code — reused from similarity.py, NO second model
+- Confidence = min(0.87, S_max + 0.5×(S_max - S_next)) — capped below regex (0.90-0.99)
+- Floor 0.55: below → return None → observer mode
+- Pipeline: 1 line change only — `classify_with_fallback` replaces `classify`
+- Logs: classifier.regex_miss + classifier.semantic_hit on fallback path
+
+---
+
+## P23 Fix — GitHub File Fetch for Runner Paths (DONE — 2026-03-22)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/tools/__init__.py | DONE | — | empty package |
+| phase2/tools/github_file.py | DONE | PASS | extract_relative_path(), fetch_file() — never raises |
+| phase2/context_builder.py | DONE | PASS | falls back to fetch_file() when local path missing |
+| tests/test_github_file.py | DONE | 15 passed | path extraction, 404, no token, network error, CB integration |
+
+Last test run: 2026-03-22
+```
+378 passed, 3 warnings in 277.54s
+```
+
+Problem: affected_file on real GitHub CI runs is `/home/runner/work/{dir}/{dir}/{rel}` — doesn't exist locally.
+Fix: `extract_relative_path()` strips runner prefix → `fetch_file()` calls GitHub Contents API.
+Repo extracted from first segment of `bug_signature` (`owner/repo:Category:kw:file`).
+Local file always takes priority — GitHub API only called when local path is missing.
+
+---
+
+## Step RAG — Triple-Hybrid Semantic RAG (DONE — 2026-03-22)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/memory/similarity.py | DONE | PASS | _thaw(), _get_embedding_model(), _score_entries(), find_for_rag() |
+| phase2/context_builder.py | DONE | PASS | uses find_for_rag(), _action_tag(), HIGH/LOW tags in headers |
+| tests/test_similarity.py | DONE | PASS | TestThawString + TestFindForRag added, existing tests updated for new weights |
+| tests/test_context_builder.py | DONE | PASS | mocks MemoryEngine.find_for_rag, HIGH/LOW tag tests added |
+| requirements.txt | DONE | — | sentence-transformers>=2.7.0, einops>=0.6.0 |
+
+Last test run: 2026-03-22
+```
+350 passed, 3 warnings in 262.58s
+```
+
+Architecture (locked):
+- Triple hybrid: 0.30 × TF-IDF + 0.45 × Jina-dense + 0.25 × Thompson
+- Jina model: jinaai/jina-embeddings-v2-small-code (lazy-loaded, never raises)
+- Jina fallback (model unavailable): (0.30/0.55)×TF-IDF + (0.25/0.55)×Thompson
+- Tier 1 bypass: ≥ 0.85 → skip Agent-Y (find_similar — unchanged)
+- Tier 2 HIGH: 0.70–0.84 → [HIGH RELEVANCE: Adapt this pattern]
+- Tier 3 LOW:  0.55–0.69 → [LOW RELEVANCE: Loose inspiration only. DO NOT copy directly.]
+- Tier 4 zero RAG: < 0.55 → nothing injected
+- Δ = s_dense - s_tfidf logged per scored entry (monitoring signal)
+- find_similar() return format UNCHANGED — pipeline.py untouched
+
+---
+
+## Step AUDIT — 13 Codebase Fixes (DONE — 2026-03-22)
+| Fix | File | What changed |
+|-----|------|-------------|
+| FIX 1 | phase2/classifier/regex_pass.py | AssertionError weight 0.09 → 0.70 |
+| FIX 2 | phase2/strategy/thompson.py + pipeline.py + schema.py | penalty=5 for structural, "structural" in DECISIONS |
+| FIX 3 | phase2/memory/similarity.py | bare except → except Exception as exc with log.error |
+| FIX 4 | phase1/webhook/server.py + phase3/webhook_worker.py | run_attempt column added to schema + SELECT |
+| FIX 5 | phase2/executor/regression.py | last_passing tracked separately — guaranteed non-None |
+| FIX 6 | phase3/webhook_worker.py | lazy _ensure_dedup_db() — no module-level init |
+| FIX 7 | phase1/dataset/schema.py + synthetic.jsonl + tests | bug_signature 4-part format enforced |
+| FIX 8 | phase2/executor/regression.py | unknown report format logged as warning |
+| FIX 9 | phase2/pipeline.py | memory reuse double-run bug fixed |
+| FIX 10 | phase2/patch_gen/worker.py | exponential backoff jitter added between retries |
+| FIX 11 | phase2/gateway.py | depth-limited rglob (max_depth=3) in all fix functions |
+| FIX 12 | phase2/executor/runner.py + pipeline.py | Syntax Reflex — ast.parse() before pytest for .py files |
+| FIX 13 | phase2/executor/runner.py | Amnesia Protocol — git clean -fd added to rollback() |
+
+Last test run: 2026-03-22
+```
+323 passed, 3 warnings in 250.10s
 ```
 
 ---
