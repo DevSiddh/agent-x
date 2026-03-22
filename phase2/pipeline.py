@@ -341,6 +341,7 @@ def run(case_id: str) -> MemoryEntry:
             log.warning("security.bandit_fail", case_id=case_id, issues=_bandit_reject)
             outcome = outcome.model_copy(update={
                 "decision": "rejected",
+                "rejection_reason": "security_issue",
                 "error": f"bandit: {_bandit_reject}",
             })
             return outcome
@@ -360,6 +361,7 @@ def run(case_id: str) -> MemoryEntry:
             log.warning("pipeline.patch_failed", case_id=case_id, error=apply_result.error)
             outcome = outcome.model_copy(update={
                 "decision": "rejected",
+                "rejection_reason": "prompt_issue",
                 "sandbox_result": "fail",
                 "error": apply_result.error,
             })
@@ -372,6 +374,7 @@ def run(case_id: str) -> MemoryEntry:
             log.warning("pipeline.syntax_error", case_id=case_id, error=syntax_error)
             outcome = outcome.model_copy(update={
                 "decision": "rejected",
+                "rejection_reason": "prompt_issue",
                 "sandbox_result": "fail",
                 "error": syntax_error,
             })
@@ -405,7 +408,10 @@ def run(case_id: str) -> MemoryEntry:
             outcome = outcome.model_copy(update={"decision": "accepted"})
             log.info("pipeline.accepted", case_id=case_id)
         else:
-            outcome = outcome.model_copy(update={"decision": "rejected"})
+            outcome = outcome.model_copy(update={
+                "decision": "rejected",
+                "rejection_reason": "logic_issue",
+            })
             log.warning("pipeline.rejected", case_id=case_id)
 
         # 10.5 — Thompson update: feed outcome back to sampler

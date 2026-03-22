@@ -46,6 +46,7 @@ class MemoryEntry(BaseModel):
     fail_count: int = 0
     error: str = ""
     test_summary: str = ""     # e.g. "12 passed, 0 failed" — for weak-success filtering (C0)
+    rejection_reason: str = "" # E1 — why rejected: prompt_issue|context_issue|logic_issue|size_issue|security_issue|unknown
 
 
 # ---------------------------------------------------------------------------
