@@ -12,6 +12,9 @@ Commands (from phone):
     /memory N         → show last N memory entries (default 5)
     /ps               → show running Claude processes
     /kill             → kill running Claude session
+    /schedule C4 02:00  → run step C4 at 2:00 AM tonight
+    /schedules          → list all scheduled steps
+    /unschedule C4      → cancel scheduled step C4
     /help             → command list
 
 Env vars required (in .env):
@@ -29,6 +32,7 @@ import os
 import signal
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -36,7 +40,7 @@ import structlog
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
 
@@ -62,6 +66,9 @@ MEMORY_JSONL = PROJECT_DIR / "memory" / "memory.jsonl"
 # Singleton running process
 _current_proc: Optional[asyncio.subprocess.Process] = None
 _current_task: Optional[asyncio.Task] = None
+
+# Scheduled steps: step_name → asyncio.Task
+_scheduled: dict[str, asyncio.Task] = {}
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -235,19 +242,106 @@ async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Sent SIGTERM to running Claude session.")
 
 
+async def _wait_and_run(step: str, hour: int, minute: int, update: Update) -> None:
+    """Wait until target time then run the step."""
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    wait_secs = (target - now).total_seconds()
+    hours_away = wait_secs / 3600
+    await update.message.reply_text(
+        f"Scheduled: step {step} at {hour:02d}:{minute:02d} (in {hours_away:.1f}h)"
+    )
+    try:
+        await asyncio.sleep(wait_secs)
+        await update.message.reply_text(f"Starting scheduled step {step}...")
+        await _run_claude(f"step {step}", update)
+    except asyncio.CancelledError:
+        await update.message.reply_text(f"Cancelled: step {step}")
+    finally:
+        _scheduled.pop(step, None)
+
+
+async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _authorized(update):
+        await _deny(update)
+        return
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text("Usage: /schedule C4 02:00")
+        return
+    step_name = context.args[0].upper()
+    time_str = context.args[1]
+    try:
+        t = datetime.strptime(time_str, "%H:%M")
+        hour, minute = t.hour, t.minute
+    except ValueError:
+        await update.message.reply_text("Invalid time format. Use HH:MM e.g. 02:00")
+        return
+    if step_name in _scheduled:
+        await update.message.reply_text(
+            f"Step {step_name} already scheduled. Use /unschedule {step_name} first."
+        )
+        return
+    task = asyncio.create_task(_wait_and_run(step_name, hour, minute, update))
+    _scheduled[step_name] = task
+
+
+async def cmd_schedules(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _authorized(update):
+        await _deny(update)
+        return
+    if not _scheduled:
+        await update.message.reply_text("No scheduled steps.")
+        return
+    lines = [f"step {name}" for name in _scheduled]
+    await update.message.reply_text("Scheduled:\n" + "\n".join(lines))
+
+
+async def cmd_unschedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _authorized(update):
+        await _deny(update)
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /unschedule C4")
+        return
+    step_name = context.args[0].upper()
+    task = _scheduled.get(step_name)
+    if task is None:
+        await update.message.reply_text(f"No scheduled step: {step_name}")
+        return
+    task.cancel()
+    await update.message.reply_text(f"Cancelled: step {step_name}")
+
+
+async def cmd_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forward any non-command message to Claude and reply with the output."""
+    if not _authorized(update):
+        await _deny(update)
+        return
+    message = update.message.text.strip()
+    if not message:
+        return
+    await update.message.reply_text("Thinking...")
+    asyncio.create_task(_run_claude(message, update))
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _authorized(update):
         await _deny(update)
         return
     text = (
         "Agent-X Telegram Bot\n\n"
-        "/step E1     — run step E1 (or any step name)\n"
-        "/audit       — run audit\n"
-        "/status      — show progress.md summary\n"
-        "/memory 10   — show last N memory entries\n"
-        "/ps          — show running Claude processes\n"
-        "/kill        — kill active Claude session\n"
-        "/help        — this message\n"
+        "/step E1            — run step E1 (or any step name)\n"
+        "/audit              — run audit\n"
+        "/status             — show progress.md summary\n"
+        "/memory 10          — show last N memory entries\n"
+        "/ps                 — show running Claude processes\n"
+        "/kill               — kill active Claude session\n"
+        "/schedule C4 02:00  — run step C4 at 2:00 AM tonight\n"
+        "/schedules          — list all scheduled steps\n"
+        "/unschedule C4      — cancel scheduled step C4\n"
+        "/help               — this message\n"
     )
     await update.message.reply_text(text)
 
@@ -267,10 +361,14 @@ def main() -> None:
     app.add_handler(CommandHandler("audit",  cmd_audit))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("memory", cmd_memory))
-    app.add_handler(CommandHandler("ps",     cmd_ps))
-    app.add_handler(CommandHandler("kill",   cmd_kill))
-    app.add_handler(CommandHandler("help",   cmd_help))
-    app.add_handler(CommandHandler("start",  cmd_help))
+    app.add_handler(CommandHandler("ps",          cmd_ps))
+    app.add_handler(CommandHandler("kill",        cmd_kill))
+    app.add_handler(CommandHandler("schedule",    cmd_schedule))
+    app.add_handler(CommandHandler("schedules",   cmd_schedules))
+    app.add_handler(CommandHandler("unschedule",  cmd_unschedule))
+    app.add_handler(CommandHandler("help",        cmd_help))
+    app.add_handler(CommandHandler("start",       cmd_help))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_chat))
 
     log.info("telegram_bot.polling")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
