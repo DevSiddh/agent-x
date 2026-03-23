@@ -71,29 +71,42 @@ def parse_report(report_path: Path, runner: str) -> tuple[list[str], int]:
 def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
     """
     Run the appropriate test suite on a fixture repo and return structured results.
-    Detects runner from affected_file extension (C3). Falls back to pytest.
+    Detects runner from manifest files via detect_runner() (C3b).
 
     Args:
         fixture_path:  Path to the fixture git repo.
-        affected_file: File that was patched — used to select correct test runner.
+        affected_file: File that was patched — used to locate the manifest.
 
     Returns:
         TestReport with passed, failed_tests, total, exit_code, raw output.
     """
-    from phase2.executor.runner import get_runner
+    from phase2.executor.runner import TestRunnerDetectionError, detect_runner
 
     fixture_path = Path(fixture_path).resolve()
-    report_file = fixture_path / "report.json"
-    cmd = get_runner(affected_file)
 
-    # Inject report file path for runners that support it
+    try:
+        cmd, exec_root = detect_runner(str(fixture_path), affected_file or ".")
+    except TestRunnerDetectionError as exc:
+        log.warning("regression.no_runner", fixture=str(fixture_path), error=str(exc))
+        return TestReport(
+            passed=False,
+            failed_tests=[],
+            total=0,
+            exit_code=1,
+            raw=str(exc),
+            note="no_runner",
+        )
+
+    report_file = exec_root / "report.json"
+
+    # Inject absolute report file path into command
     cmd_with_report = [
         arg.replace("report.json", str(report_file)) for arg in cmd
     ]
 
     result = subprocess.run(
         cmd_with_report,
-        cwd=fixture_path,
+        cwd=exec_root,
         capture_output=True,
         text=True,
     )

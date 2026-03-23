@@ -66,7 +66,16 @@ def extract_failure_window(lines: list[str], n: int = 40) -> list[str]:
     Falls back to last n lines when no error marker is found.
     """
     log.info("cleaner.extract_failure_window", total_lines=len(lines), window=n)
-    markers = ("ERROR", "Traceback", "FAILED", "Error:", "error:", "Exception")
+    markers = (
+        # Python
+        "ERROR", "Traceback", "FAILED", "Error:", "error:", "Exception",
+        # Node.js
+        "at Object.<anonymous>", "at Module.", "npm ERR!", "yarn ERR!",
+        # PHP
+        "PHP Fatal error:", "PHP Warning:", "PHP Parse error:", "PHP Notice:",
+        # Java
+        "Exception in thread", "Caused by:", "BUILD FAILURE",
+    )
     last_idx = -1
     for i, line in enumerate(lines):
         if any(m in line for m in markers):

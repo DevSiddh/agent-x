@@ -22,6 +22,53 @@ def _state_path() -> Path:
     return Path(__file__).parent.parent.parent / "memory" / "thompson_state.json"
 
 
+# Ecosystem labels for Thompson arm key format: "{Category}_{Ecosystem}"
+ECOSYSTEM_MAP: dict[str, str] = {
+    ".py":   "Python",
+    ".js":   "Node",
+    ".ts":   "Node",
+    ".tsx":  "Node",
+    ".jsx":  "Node",
+    ".php":  "PHP",
+    ".java": "Java",
+    ".sql":  "SQL",
+}
+
+
+def _migrate_arms(arms: dict[str, Any]) -> dict[str, Any]:
+    """
+    Migrate old arm keys to "{Category}_{Ecosystem}" format.
+
+    Old format: "repo:Category:keyword:file"  (contains ":")
+    New format: "Category_Ecosystem"           (no ":", has "_")
+    Bare format: "Category"                    (no ":", no "_")
+
+    Old entries are mapped to Category_Python (all previous runs were Python repos).
+    When multiple old arms collapse to the same new key, their alpha/beta are summed
+    (subtracting the initial Beta(1,1) baseline to avoid double-counting).
+    """
+    migrated: dict[str, Any] = {}
+    for k, v in arms.items():
+        if ":" in k:
+            # old bug_signature format: repo:Category:keyword:file
+            parts = k.split(":")
+            category = parts[1] if len(parts) >= 2 else "RuntimeError"
+            new_key = f"{category}_Python"
+        elif "_" in k:
+            new_key = k  # already new format
+        else:
+            new_key = f"{k}_Python"  # bare category
+
+        if new_key in migrated:
+            # Merge: sum contributions, subtract one baseline to avoid double-count
+            migrated[new_key]["alpha"] += max(0, v.get("alpha", 1) - 1)
+            migrated[new_key]["beta"] += max(0, v.get("beta", 1) - 1)
+        else:
+            migrated[new_key] = {"alpha": v.get("alpha", 1), "beta": v.get("beta", 1)}
+
+    return migrated
+
+
 class ThompsonSampler:
     """
     Multi-armed bandit over bug_signature arms.
@@ -88,11 +135,18 @@ class ThompsonSampler:
     # ------------------------------------------------------------------
 
     def load(self) -> None:
-        """Load state from thompson_state.json. Silently ignores errors."""
+        """Load state from thompson_state.json, migrating old arm keys if needed."""
         try:
             path = _state_path()
             if path.exists():
                 raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+                # Detect if migration needed: any key containing ":" is old format
+                needs_migration = any(":" in k for k in raw)
+                if needs_migration:
+                    raw = _migrate_arms(raw)
+                    log.info("thompson.migrated", arms=len(raw))
+                    # Persist migrated state immediately
+                    path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
                 self._state = raw
                 log.info("thompson.loaded", arms=len(self._state))
         except Exception as exc:  # noqa: BLE001

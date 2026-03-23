@@ -5,6 +5,7 @@ All paths use pathlib.Path + cwd= param. (P16)
 """
 
 import ast
+import json
 import os
 import subprocess
 import sys
@@ -17,34 +18,107 @@ from pydantic import BaseModel
 log = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
-# Runner map — file extension → test command (C3)
+# Manifest-based runner detection (C3b)
 # ---------------------------------------------------------------------------
 
-_RUNNER_MAP: dict[str, list[str]] = {
-    ".py":   [sys.executable, "-m", "pytest", "tests/", "--tb=short",
-              "--json-report", "--json-report-file=report.json", "-q"],
-    ".js":   ["npx", "jest", "--json", "--outputFile=report.json"],
-    ".ts":   ["npx", "vitest", "run", "--reporter=json"],
-    ".php":  ["phpunit", "--log-json", "report.json"],
-    ".java": ["mvn", "test"],
-}
+class TestRunnerDetectionError(Exception):
+    """Raised when no test runner manifest is found in the fixture tree."""
 
 
-def get_runner(affected_file: str) -> list[str]:
+_PYTEST_CMD: list[str] = [
+    sys.executable, "-m", "pytest", "tests/", "--tb=short",
+    "--json-report", "--json-report-file=report.json", "-q",
+]
+
+
+def _check_manifest(directory: Path) -> tuple[list[str], Path] | None:
     """
-    Return the correct test runner command for the given file extension.
-    Falls back to pytest for unrecognised extensions.
+    Check for a test runner manifest in directory.
+    Returns (runner_cmd, execution_root) or None if no manifest found.
+    Priority: package.json → pyproject.toml/pytest.ini → tox.ini → pom.xml → build.gradle → Makefile
+    """
+    pkg_json = directory / "package.json"
+    if pkg_json.exists():
+        try:
+            pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
+            test_script = pkg.get("scripts", {}).get("test", "")
+            if "vitest" in test_script:
+                return ["npx", "vitest", "run", "--reporter=json"], directory
+        except Exception:
+            pass
+        return ["npx", "jest", "--json", "--outputFile=report.json"], directory
+
+    if (directory / "pyproject.toml").exists() or (directory / "pytest.ini").exists():
+        return _PYTEST_CMD, directory
+
+    if (directory / "tox.ini").exists():
+        return _PYTEST_CMD, directory
+
+    if (directory / "pom.xml").exists():
+        return ["mvn", "test"], directory
+
+    if (directory / "build.gradle").exists() or (directory / "build.gradle.kts").exists():
+        return ["./gradlew", "test"], directory
+
+    if (directory / "Makefile").exists():
+        return ["make", "test"], directory
+
+    return None
+
+
+def detect_runner(fixture_path: str, affected_file: str) -> tuple[list[str], Path]:
+    """
+    Detect the correct test runner by walking up from the affected file's
+    directory to the fixture root, checking for manifest files.
+
+    Manifest priority: package.json → pyproject.toml/pytest.ini → tox.ini
+                       → pom.xml → build.gradle → Makefile
 
     Args:
-        affected_file: Path or filename with extension (e.g. 'app.js', 'main.py').
+        fixture_path:  Root of the fixture git repo.
+        affected_file: Path to the file that was patched (absolute or relative).
 
     Returns:
-        Command list suitable for subprocess.run().
+        Tuple of (runner_command, execution_root_path).
+
+    Raises:
+        TestRunnerDetectionError: No manifest found in the fixture tree.
     """
-    suffix = Path(affected_file).suffix.lower()
-    cmd = _RUNNER_MAP.get(suffix, _RUNNER_MAP[".py"])
-    log.info("executor.runner", lang=suffix or ".py", cmd=cmd[0])
-    return cmd
+    fp = Path(fixture_path).resolve()
+    af = Path(affected_file)
+
+    # Determine starting directory within the fixture
+    if af.is_absolute():
+        try:
+            start_dir = (fp / af.relative_to(fp)).parent.resolve()
+        except ValueError:
+            start_dir = fp
+    else:
+        start_dir = (fp / af.parent).resolve()
+
+    # Clamp to fixture root (never walk above it)
+    if not str(start_dir).startswith(str(fp)):
+        start_dir = fp
+
+    # Walk up from start_dir to fp
+    current = start_dir
+    while True:
+        result = _check_manifest(current)
+        if result is not None:
+            cmd, exec_root = result
+            log.info("executor.runner_detected", exec_root=str(exec_root), runner=cmd[0])
+            return cmd, exec_root
+
+        if current == fp:
+            break
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    raise TestRunnerDetectionError(
+        f"No test runner manifest found in {fp} (searched from {start_dir})"
+    )
 
 
 class ApplyResult(BaseModel):
