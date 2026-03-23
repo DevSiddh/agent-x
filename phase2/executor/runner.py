@@ -63,6 +63,10 @@ def _check_manifest(directory: Path) -> tuple[list[str], Path] | None:
     if (directory / "Makefile").exists():
         return ["make", "test"], directory
 
+    # Fallback: tests/ directory present → assume pytest (Python convention)
+    if (directory / "tests").is_dir():
+        return _PYTEST_CMD, directory
+
     return None
 
 
