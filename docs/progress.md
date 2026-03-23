@@ -1,6 +1,6 @@
 # Agent-X | Progress Tracker
 # AUTO-UPDATED by Claude after every completed step + passing tests
-# Last updated: 2026-03-22
+# Last updated: 2026-03-23
 # Rule: Claude MUST update this file after every step before moving to next
 
 ---
@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v2.1.6 IN PROGRESS — 2026-03-22 — RAG + CLS + P23 DONE. Next: E1 → C3b → C4 → D0 → D1 → E0 → E2
+## Overall Status: v2.1.6 IN PROGRESS — 2026-03-23 — C3b DONE. Next: C4 → D0 → D1 → E0 → E2
 
 ---
 
@@ -361,7 +361,7 @@ Executor runs correct test runner per language. Classifier recognises JS/PHP/Jav
 |------|-------------|--------|
 | Step C3 | Multi-language executor — jest/vitest/phpunit/junit per file extension | DONE |
 | Step AUDIT | 13 fixes: 11 audit bugs + Syntax Reflex (FIX 12) + Amnesia Protocol (FIX 13) | DONE — 2026-03-22 |
-| Step C3b | Multi-language classifier + log cleaner patterns (JS/PHP/Java/SQL) | PENDING |
+| Step C3b | Multi-language classifier + log cleaner patterns (JS/PHP/Java/SQL) | DONE — 2026-03-23 |
 | Step C4 | Playwright visual validation — gated by file extension | PENDING |
 
 ### What these steps add
@@ -388,7 +388,7 @@ Dashboard shows live pipeline stats. Rejection patterns identified and classifie
 | Step | Description | Cost | Status |
 |------|-------------|------|--------|
 | Step E0 | Streamlit dashboard — run summary, Thompson scores, cost saved | $0 | PENDING |
-| Step E1 | Failure learning — classify rejection reasons, identify top fix direction | $0 | PENDING |
+| Step E1 | Failure learning — classify rejection reasons, identify top fix direction | $0 | DONE — 2026-03-23 |
 | Step E2 | Cross-repo pattern detection — auto-generate gateway rule candidates | $0 | PENDING (gate: 3+ repos) |
 
 ### What these steps add
@@ -639,6 +639,30 @@ Last test run: 2026-03-22
 ```
 323 passed, 3 warnings in 250.10s
 ```
+
+---
+
+## Step E1 — Failure Learning Classifier (DONE — 2026-03-23)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/memory/failure_classifier.py | DONE | PASS | RejectionSummary, classify_rejections(), print_report() |
+| phase2/memory/store.py | DONE | PASS | rejection_reason field added to MemoryEntry |
+| phase2/pipeline.py | DONE | PASS | rejection_reason populated on rejected/abstained outcomes |
+| phase2/patch_gen/sanitiser.py | DONE | PASS | rejection_reason set on size/format rejections |
+| phase2/patch_gen/worker.py | DONE | PASS | rejection_reason set on LLM/API failures |
+| tests/test_failure_classifier.py | DONE | PASS | Path 1 (new entries), Path 2 (legacy), top_direction |
+
+Last test run: 2026-03-23
+```
+383 passed, 4 warnings in 237.51s
+```
+
+Architecture (locked):
+- Path 1: new entries — rejection_reason already set by pipeline (prompt_issue|context_issue|logic_issue|size_issue|security_issue|unknown)
+- Path 2: legacy entries — rejection_reason=="" → classify from error field via regex fallback
+- RejectionSummary: counts per category + top_direction (most frequent non-unknown)
+- Never raises — returns zeros if memory.jsonl missing
+- CLI: python -m phase2.memory.failure_classifier → prints report to stdout
 
 ---
 

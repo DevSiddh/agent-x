@@ -166,10 +166,10 @@ class TestPersistence:
         assert sig in saved
 
     def test_state_reloads_correctly(self, tmp_path: Path) -> None:
-        sig = "repo:ConfigError:kw:config.yaml"
+        """New-format key persists and reloads without migration."""
+        sig = "ConfigError_Python"
         state_file = tmp_path / "thompson_state.json"
 
-        # Write state manually
         state_file.write_text(
             json.dumps({sig: {"alpha": 7, "beta": 3}}), encoding="utf-8"
         )
@@ -178,6 +178,25 @@ class TestPersistence:
             sampler2 = ThompsonSampler()
 
         arm = sampler2.get_arm(sig)
+        assert arm["alpha"] == 7
+        assert arm["beta"] == 3
+
+    def test_migration_converts_old_format_key(self, tmp_path: Path) -> None:
+        """Old-format key (repo:Category:kw:file) is migrated to Category_Python on load."""
+        old_sig = "repo:ConfigError:kw:config.yaml"
+        new_sig = "ConfigError_Python"
+        state_file = tmp_path / "thompson_state.json"
+
+        state_file.write_text(
+            json.dumps({old_sig: {"alpha": 7, "beta": 3}}), encoding="utf-8"
+        )
+
+        with patch.object(mod, "_state_path", return_value=state_file):
+            sampler2 = ThompsonSampler()
+
+        # Old key gone, migrated to new key
+        assert new_sig in sampler2._state
+        arm = sampler2.get_arm(new_sig)
         assert arm["alpha"] == 7
         assert arm["beta"] == 3
 

@@ -5,6 +5,7 @@ and confidence score from cleaned error lines.
 """
 
 import re
+from pathlib import Path
 from typing import NamedTuple
 
 import structlog
@@ -30,6 +31,12 @@ _PATTERNS: dict[str, list[_Pattern]] = {
         _Pattern(re.compile(r"pkg_resources", re.I), "pkg_resources", 0.30),
         _Pattern(re.compile(r"Could not find a version that satisfies the requirement (\S+)", re.I), "pip_conflict", 0.50),
         _Pattern(re.compile(r"setuptools", re.I), "setuptools", 0.20),
+        # JS/Node
+        _Pattern(re.compile(r"Cannot find module", re.I), "cannot_find_module", 0.90),
+        # PHP
+        _Pattern(re.compile(r"Fatal error: Class .* not found", re.I), "class_not_found", 0.90),
+        # Java
+        _Pattern(re.compile(r"ClassNotFoundException", re.I), "class_not_found", 0.90),
     ],
     "EnvironmentError": [
         _Pattern(re.compile(r"no.build.isolation", re.I), "no_build_isolation", 0.90),
@@ -39,6 +46,10 @@ _PATTERNS: dict[str, list[_Pattern]] = {
         _Pattern(re.compile(r"port.*already in use|address already in use", re.I), "port_conflict", 0.80),
         _Pattern(re.compile(r"environment variable.*not set", re.I), "missing_env_var", 0.70),
         _Pattern(re.compile(r"EnvironmentError", re.I), "missing_env_var", 0.20),
+        # JS/Node
+        _Pattern(re.compile(r"ECONNREFUSED", re.I), "connection_refused", 0.90),
+        # SQL
+        _Pattern(re.compile(r"Access denied for user", re.I), "access_denied", 0.90),
     ],
     "ConfigError": [
         _Pattern(re.compile(r"no such table:\s*(\w+)", re.I), "no_such_table", 0.80),
@@ -47,6 +58,9 @@ _PATTERNS: dict[str, list[_Pattern]] = {
         _Pattern(re.compile(r"malformed YAML|yaml.*error", re.I), "malformed_yaml", 0.80),
         _Pattern(re.compile(r"yaml\.YAMLError|YAMLError", re.I), "malformed_yaml", 0.20),
         _Pattern(re.compile(r"KeyError: '([^']+)'", re.I), "missing_key", 0.50),
+        # SQL
+        _Pattern(re.compile(r"Table '?[\w.`]+'? doesn'?t exist", re.I), "table_missing", 0.90),
+        _Pattern(re.compile(r"(?:Column '?\w+'? (?:not found|doesn'?t exist|unknown)|Unknown column '?\w+'?)", re.I), "column_missing", 0.90),
     ],
     "RuntimeError": [
         _Pattern(re.compile(r"Field.*conflicts with protected namespace", re.I), "pydantic_namespace", 0.80),
@@ -58,11 +72,40 @@ _PATTERNS: dict[str, list[_Pattern]] = {
         _Pattern(re.compile(r"TypeError:.*argument", re.I), "type_error", 0.40),
         _Pattern(re.compile(r"ValueError", re.I), "value_error", 0.40),
         _Pattern(re.compile(r"AttributeError", re.I), "attribute_error", 0.40),
+        # JS/Node
+        _Pattern(re.compile(r"ReferenceError: \S+ is not defined", re.I), "reference_error", 0.90),
+        _Pattern(re.compile(r"TypeError: \S+ is not a function", re.I), "not_a_function", 0.90),
+        # Java
+        _Pattern(re.compile(r"NullPointerException", re.I), "null_pointer", 0.90),
+        # PHP
+        _Pattern(re.compile(r"Warning: .* expects parameter", re.I), "wrong_param", 0.70),
+    ],
+    "SyntaxError": [
+        # JS/Node
+        _Pattern(re.compile(r"SyntaxError: Unexpected token", re.I), "unexpected_token", 0.90),
+        _Pattern(re.compile(r"SyntaxError: (?:Cannot use|Unexpected)", re.I), "js_syntax", 0.80),
+        # PHP
+        _Pattern(re.compile(r"Parse error: syntax error", re.I), "php_syntax", 0.90),
+        _Pattern(re.compile(r"PHP Parse error", re.I), "php_syntax", 0.70),
     ],
     "BuildError": [
         _Pattern(re.compile(r"docker.*failed|failed to build image", re.I), "docker_failure", 0.80),
         _Pattern(re.compile(r"build isolation", re.I), "build_isolation", 0.50),
     ],
+}
+
+# Ecosystem detection map: file extension → ecosystem label
+_ECOSYSTEM_MAP: dict[str, str] = {
+    ".py":   "Python",
+    ".js":   "Node",
+    ".ts":   "Node",
+    ".tsx":  "Node",
+    ".jsx":  "Node",
+    ".json": "Node",
+    ".php":  "PHP",
+    ".java": "Java",
+    ".sql":  "SQL",
+    ".rb":   "Ruby",
 }
 
 FAILURE_CATEGORIES = list(_PATTERNS.keys())
@@ -79,6 +122,7 @@ class ClassifierResult(BaseModel):
     keyword: str
     affected_file: str
     bug_signature: str  # format: repo:ErrorType:keyword:file  (P12)
+    ecosystem: str = "Python"  # derived from affected_file extension — used for Thompson arm
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +134,20 @@ def _extract_affected_file(
 ) -> str:
     """Extract affected file from traceback, fall back to category heuristics."""
     for line in error_lines:
+        # Python traceback: File "/path/to/file.py", line N
         m = re.search(r'File "([^"]+)"', line)
+        if m:
+            return m.group(1)
+        # PHP: ... in /path/to/file.php on line N
+        m = re.search(r' in (/\S+\.php) on line', line)
+        if m:
+            return m.group(1)
+        # Java stack trace: at com.example.Class(File.java:42)
+        m = re.search(r'\((\w+\.java):\d+\)', line)
+        if m:
+            return m.group(1)
+        # Node.js: at Object.<anonymous> (/path/to/file.js:N:M)
+        m = re.search(r'at \S+ \((/[^)]+\.(?:js|ts|jsx|tsx)):\d+:\d+\)', line)
         if m:
             return m.group(1)
 
@@ -100,7 +157,16 @@ def _extract_affected_file(
     if keyword == "stale_pycache":
         return "scripts/restart.sh"
     if category == "DependencyError":
+        if keyword == "cannot_find_module":
+            return "package.json"
+        if keyword == "class_not_found":
+            return "composer.json"
         return "requirements.txt"
+    if category == "SyntaxError":
+        if keyword in ("unexpected_token", "js_syntax"):
+            return "unknown.js"
+        if keyword in ("php_syntax",):
+            return "unknown.php"
 
     return "unknown"
 
@@ -148,6 +214,7 @@ def classify(error_lines: list[str], repo: str) -> ClassifierResult:
     confidence = min(0.99, best_score)
     affected_file = _extract_affected_file(error_lines, best_category, best_keyword)
     bug_signature = f"{repo}:{best_category}:{best_keyword}:{affected_file}"
+    ecosystem = _ECOSYSTEM_MAP.get(Path(affected_file).suffix.lower(), "Python")
 
     result = ClassifierResult(
         category=best_category,
@@ -156,6 +223,7 @@ def classify(error_lines: list[str], repo: str) -> ClassifierResult:
         keyword=best_keyword,
         affected_file=affected_file,
         bug_signature=bug_signature,
+        ecosystem=ecosystem,
     )
 
     log.info(
