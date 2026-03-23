@@ -314,6 +314,73 @@ async def cmd_unschedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f"Cancelled: step {step_name}")
 
 
+async def _run_chain(steps: list[str], start_hour: int, start_minute: int,
+                     gap_minutes: int, update: Update) -> None:
+    """Wait until start time, then run steps sequentially with gap between each."""
+    now = datetime.now()
+    target = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    wait_secs = (target - now).total_seconds()
+
+    await update.message.reply_text(
+        f"Chain scheduled: {' → '.join(steps)}\n"
+        f"Starts at {start_hour:02d}:{start_minute:02d} "
+        f"(in {wait_secs/3600:.1f}h), {gap_minutes}min gap between steps."
+    )
+
+    try:
+        await asyncio.sleep(wait_secs)
+    except asyncio.CancelledError:
+        await update.message.reply_text("Chain cancelled before it started.")
+        return
+
+    for i, step in enumerate(steps):
+        await update.message.reply_text(
+            f"Chain [{i+1}/{len(steps)}]: starting step {step}..."
+        )
+        await _run_claude(f"step {step}", update)
+        if i < len(steps) - 1:
+            await update.message.reply_text(
+                f"Step {step} done. Waiting {gap_minutes}min before step {steps[i+1]}..."
+            )
+            try:
+                await asyncio.sleep(gap_minutes * 60)
+            except asyncio.CancelledError:
+                await update.message.reply_text(f"Chain cancelled after step {step}.")
+                return
+
+    await update.message.reply_text(
+        f"All done! Chain complete: {' → '.join(steps)}"
+    )
+
+
+async def cmd_chain(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Schedule a chain of steps to run sequentially.
+    Usage: /chain 22:30 C4 D0 E0
+    Runs C4 at 22:30, then waits 1hr after each step finishes before running next.
+    """
+    if not _authorized(update):
+        await _deny(update)
+        return
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "Usage: /chain 22:30 C4 D0 E0\n"
+            "Runs steps sequentially, 1hr gap after each completes."
+        )
+        return
+    time_str = context.args[0]
+    steps = [s.upper() for s in context.args[1:]]
+    try:
+        t = datetime.strptime(time_str, "%H:%M")
+        hour, minute = t.hour, t.minute
+    except ValueError:
+        await update.message.reply_text("Invalid time. Use HH:MM e.g. 22:30")
+        return
+    asyncio.create_task(_run_chain(steps, hour, minute, 60, update))
+
+
 async def cmd_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Forward any non-command message to Claude and reply with the output."""
     if not _authorized(update):
@@ -366,6 +433,7 @@ def main() -> None:
     app.add_handler(CommandHandler("schedule",    cmd_schedule))
     app.add_handler(CommandHandler("schedules",   cmd_schedules))
     app.add_handler(CommandHandler("unschedule",  cmd_unschedule))
+    app.add_handler(CommandHandler("chain",       cmd_chain))
     app.add_handler(CommandHandler("help",        cmd_help))
     app.add_handler(CommandHandler("start",       cmd_help))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_chat))
