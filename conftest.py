@@ -19,7 +19,18 @@ def _init_fixture_repo(path: Path) -> None:
     """Init a fresh git repo in a fixture dir and commit all files."""
     git = ["git", "-C", str(path)]
     if (path / ".git").exists():
-        return  # already initialised
+        # Migration: add pytest.ini if untracked so detect_runner can find a manifest
+        result = subprocess.run(
+            [*git, "ls-files", "--others", "--exclude-standard", "pytest.ini"],
+            capture_output=True, text=True,
+        )
+        if result.stdout.strip() == "pytest.ini":
+            subprocess.run([*git, "add", "pytest.ini"], check=True)
+            subprocess.run(
+                [*git, "commit", "-q", "-m", "add pytest.ini for manifest detection"],
+                check=True,
+            )
+        return
     subprocess.run([*git, "init", "-q"], check=True)
     subprocess.run([*git, "config", "user.email", "challayagneshsaisiddhardha@gmail.com"], check=True)
     subprocess.run([*git, "config", "user.name", "CH Y SAI SIDDHARDHA"], check=True)

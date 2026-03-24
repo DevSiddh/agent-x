@@ -128,6 +128,34 @@ def build_context(
         log.info("context_builder.rag_hits", count=len(rag_results))
     else:
         log.info("context_builder.rag_empty", signature=classifier_result.bug_signature)
+        # --- Conditional web fallback (Zero-Day trigger) ----------------------
+        # When local RAG returns nothing, attempt a live web search for the category.
+        # Only for DependencyError / EnvironmentError — most likely to have docs online.
+        # Gate: only fires when FinalScore < 0.55 for ALL entries (rag_results == [])
+        _web_categories = {"DependencyError", "EnvironmentError"}
+        if classifier_result.category in _web_categories:
+            try:
+                import os
+                from phase2.tools.web_reader import fetch_docs
+                _query = (
+                    f"{classifier_result.category} {classifier_result.matched_pattern} "
+                    f"{classifier_result.keyword} fix"
+                )
+                _search_url = (
+                    f"https://stackoverflow.com/search?q={_query.replace(' ', '+')}"
+                )
+                _web_text = fetch_docs(_search_url, max_tokens=1000)
+                if _web_text:
+                    sections.append(
+                        f"## Web Reference (live docs — local memory empty)\n{_web_text}"
+                    )
+                    log.info(
+                        "context_builder.web_fallback",
+                        category=classifier_result.category,
+                        query=_query[:80],
+                    )
+            except Exception as _web_exc:
+                log.warning("context_builder.web_fallback_failed", error=str(_web_exc))
 
     return "\n\n".join(sections)
 
