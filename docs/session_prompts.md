@@ -1,7 +1,7 @@
 # Agent-X + Agent-Y | Session Prompts — INDEX
 # Say "step N" → Claude loads the right file below and executes that step.
-# Last updated: 2026-03-22
-# Status: v2.1.6 IN PROGRESS — Next: C3b → C4 → D0 → D1 → E0 → E2
+# Last updated: 2026-03-24
+# Status: v2.2 IN PROGRESS — D0 + D1 + E0 + E1 + C3 + C3b DONE — Next: C4 → E2
 
 ---
 
@@ -47,16 +47,16 @@
 | step C1     | v215_steps.md               | DONE     |
 | step C2     | v215_steps.md               | DONE     |
 | step C3     | v216_steps.md               | DONE     |
-| step AUDIT  | v216_steps.md               | PENDING ← NEXT |
+| step AUDIT  | v216_steps.md               | PENDING        |
 | step RAG    | rag_steps.md                | DONE     |
 | step CLS    | rag_steps.md                | DONE     |
 | step RAG-NEG| rag_steps.md                | PENDING (gate: 10+ logic_issue rejections) |
 | step E1     | v23_analytics.md            | DONE     |
 | step C3b    | v216_steps.md               | DONE     |
 | step C4     | v216_steps.md               | PENDING  |
-| step D0     | v22_steps.md                | PENDING  |
-| step D1     | v22_steps.md                | PENDING  |
-| step E0     | v23_analytics.md            | PENDING  |
+| step D0     | v22_steps.md                | DONE     |
+| step D1     | v22_steps.md                | DONE     |
+| step E0     | v23_analytics.md            | DONE     |
 | step E2     | v23_analytics.md            | PENDING (gate: 3+ repos) |
 | step A4     | v1_steps_9_14.md            | TRIGGER  |
 | audit       | audit.md                    | ALWAYS   |

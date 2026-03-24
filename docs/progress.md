@@ -1,6 +1,6 @@
 # Agent-X | Progress Tracker
 # AUTO-UPDATED by Claude after every completed step + passing tests
-# Last updated: 2026-03-23
+# Last updated: 2026-03-24 (E0 — night run: D0 + E0 completed out of original order)
 # Rule: Claude MUST update this file after every step before moving to next
 
 ---
@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v2.1.6 IN PROGRESS — 2026-03-23 — C3b DONE. Next: C4 → D0 → D1 → E0 → E2
+## Overall Status: v2.2 IN PROGRESS — 2026-03-24 — D1 DONE. Next: C4 → E2
 
 ---
 
@@ -338,7 +338,8 @@ Agent-Y gets file tree + web docs + PDF summary before planning. Agent-X gets Gi
 
 | Step | Description | Status |
 |------|-------------|--------|
-| Step D0 | File tree reader + Web reader + GitHub search + PDF summarizer (NotebookLM-style) | PENDING |
+| Step D0 | File tree reader + Web reader + GitHub search + PDF summarizer (NotebookLM-style) | DONE — 2026-03-24 |
+| Step D1 | Auto-PR + structural issues + diagnosis field + complexity delta | DONE — 2026-03-24 |
 
 ### What these tools add
 | Tool | What it gives | Who uses it |
@@ -387,7 +388,7 @@ Dashboard shows live pipeline stats. Rejection patterns identified and classifie
 
 | Step | Description | Cost | Status |
 |------|-------------|------|--------|
-| Step E0 | Streamlit dashboard — run summary, Thompson scores, cost saved | $0 | PENDING |
+| Step E0 | Streamlit dashboard — run summary, Thompson scores, cost saved | $0 | DONE — 2026-03-24 |
 | Step E1 | Failure learning — classify rejection reasons, identify top fix direction | $0 | DONE — 2026-03-23 |
 | Step E2 | Cross-repo pattern detection — auto-generate gateway rule candidates | $0 | PENDING (gate: 3+ repos) |
 
@@ -639,6 +640,92 @@ Last test run: 2026-03-22
 ```
 323 passed, 3 warnings in 250.10s
 ```
+
+---
+
+## Step D0 — v2.2 Context Tools (DONE — 2026-03-24)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/executor/regression.py | DONE | PASS | extract_failing_test(), verify_pre_patch(), shadow_type_check() — negative check + mypy |
+| phase2/executor/security_gate.py | DONE | PASS | SecurityResult, scan_patch() — detect-secrets + pip-audit, never blocks if missing |
+| phase3/runner.py | DONE | PASS | _ping_healthcheck() + _alert_fatal() monitoring wired into poll_loop |
+| .env.example | DONE | — | HEALTHCHECK_URL + NTFY_TOPIC added |
+| phase2/tools/ast_mapper.py | DONE | PASS | map_repo() — AST skeleton, max_tokens cap, excludes test files |
+| phase2/tools/blast_radius.py | DONE | PASS | get_blast_radius() — 3 tiers, max 8 files |
+| phase2/tools/web_reader.py | DONE | PASS | fetch_docs() — noise stripping, token cap, fallback without bs4 |
+| phase2/context_builder.py | DONE | PASS | conditional web fallback on empty RAG (DependencyError/EnvironmentError) |
+| phase2/tools/github_search.py | DONE | PASS | search_code() — stars filter, max 3 snippets, lazy token |
+| phase2/tools/pdf_extractor.py | DONE | PASS | summarize_docs() — pdfplumber + deepseek structured output, never raw dump |
+| phase2/pipeline.py | DONE | PASS | security gate (7.5) + negative check (5.8) + shadow type check (8.7) wired |
+| tests/test_tools.py | DONE | 37 passed | all tools + security_gate + regression D0 |
+
+Last test run: 2026-03-24
+```
+441 passed, 5 warnings in 225.25s
+```
+
+Architecture locked:
+- Negative check (5.8): extract test name → verify FAILS pre-patch → if passes → abstain (placebo)
+- Security gate (7.5): detect-secrets on patch + pip-audit on requirements changes — never blocks if tool missing
+- Shadow type check (8.7): mypy on patched .py file — rejects type violations, skip silently if mypy absent
+- ast_mapper: AST signatures only (no bodies), sorted by proximity to affected_file, 2000 token cap
+- blast_radius: Tier1=affected, Tier2=imports by affected, Tier3=importers of affected, max 8 files
+- web_reader: strips nav/footer/script, respects max_tokens, works without bs4 (regex fallback)
+- Web fallback: fires when find_for_rag() returns [] AND category in {DependencyError, EnvironmentError}
+- github_search: stars>50 filter, max 3 snippets, lazy GITHUB_TOKEN
+- pdf_extractor: pdfplumber text → deepseek-chat → structured JSON (5 keys), never raw dump
+
+---
+
+## Step D1 — Auto-PR + Transparent Expert Layer (DONE — 2026-03-24)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| phase2/tools/pr_creator.py | DONE | PASS | create_pr() + open_structural_issue(), Git Database API, App+PAT auth |
+| agent_y/reasoner.py | DONE | PASS | diagnosis field added to ReasonerOutput + system prompt |
+| phase2/executor/regression.py | DONE | PASS | get_complexity() + complexity_before/after/delta in TestReport |
+| phase2/memory/store.py | DONE | PASS | pr_url + issue_url + diagnosis fields in MemoryEntry |
+| phase2/pipeline.py | DONE | PASS | create_pr() after accepted, open_structural_issue() after structural |
+| tests/test_pr_creator.py | DONE | 16 passed | mocked API flow, error handling, never-raises |
+| tests/test_reasoner.py | DONE | PASS | updated mocks to include diagnosis field |
+
+Last test run: 2026-03-24
+```
+480 passed, 5 warnings in 268.53s
+```
+
+Architecture locked:
+- Auth: GitHub App (GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY + GITHUB_APP_INSTALLATION_ID) → PAT fallback (GITHUB_TOKEN)
+- Git Database API: 10-step flow, no local git clone — works from server directly
+- PRs always Draft — agent-x never merges automatically
+- PR body: diagnosis + category + complexity delta + Ghost Test proof + diff
+- Branch name: agent-x-fixes/{bug_sig_hash}-{run_id}
+- Structural → GitHub Issue with labels: needs-human-review, agent-x, structural
+- PR creation skipped for REPO == "synthetic" (safe for local test runs)
+
+---
+
+## Step E0 — Streamlit Dashboard (DONE — 2026-03-24)
+| File | Status | Tests | Notes |
+|------|--------|-------|-------|
+| dashboard/__init__.py | DONE | — | empty package |
+| dashboard/data.py | DONE | PASS | load_entries, load_thompson_state, run_summary, cost_saved_summary, thompson_table, category_breakdown, rejection_breakdown, acceptance_rate |
+| dashboard/app.py | DONE | — | Streamlit app — 5 sections, reads memory.jsonl + thompson_state.json |
+| tests/test_dashboard.py | DONE | 23 passed | all data.py functions: load, summary, cost, thompson, categories, rejection |
+
+Last test run: 2026-03-24
+```
+464 passed, 5 warnings in 250.02s
+```
+
+Run dashboard: `python -m streamlit run dashboard/app.py`
+
+Architecture (locked):
+- data.py: pure Python data layer — no Streamlit, fully testable
+- app.py: Streamlit only — imports data.py, no business logic
+- Reads memory.jsonl + thompson_state.json at page load (no caching — always fresh)
+- 5 sections: Run Summary | Category Breakdown | Thompson Scores | Cost Saved | Rejection Reasons
+- Cost model: DeepSeek-chat ~$0.28/1M tokens × ~1000 tokens/call = $0.00028/call
+- LLM bypass count = memory_reuse + gateway model_used entries
 
 ---
 
