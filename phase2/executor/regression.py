@@ -21,7 +21,10 @@ class TestReport(BaseModel):
     total: int
     exit_code: int
     raw: str
-    note: str = ""   # "flaky" when run_tests_stable detects intermittent failures (C1)
+    note: str = ""                       # "flaky" when run_tests_stable detects intermittent failures (C1)
+    complexity_before: float | None = None  # radon average complexity pre-patch (D1)
+    complexity_after: float | None = None   # radon average complexity post-patch (D1)
+    complexity_delta: float | None = None   # after - before; positive = more complex
 
 
 def parse_report(report_path: Path, runner: str) -> tuple[list[str], int]:
@@ -66,6 +69,36 @@ def parse_report(report_path: Path, runner: str) -> tuple[list[str], int]:
         log.warning("regression.unknown_report_format", runner=runner, keys=list(data.keys()))
 
     return failed, total
+
+
+def get_complexity(file_path: Path) -> float | None:
+    """
+    Run radon cc on a file and return the average cyclomatic complexity.
+    Returns None if radon not installed, file not Python, or any error.
+    Never raises.
+    """
+    if not file_path.exists() or file_path.suffix != ".py":
+        return None
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "radon", "cc", str(file_path), "--average", "-s"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        # radon outputs "Average complexity: A (1.5)" — parse the float
+        for line in result.stdout.splitlines():
+            if "Average complexity" in line:
+                parts = line.rsplit("(", 1)
+                if len(parts) == 2:
+                    val = parts[1].rstrip(")")
+                    return float(val)
+        return None
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
+        return None
+    except Exception as exc:
+        log.warning("regression.complexity_error", error=str(exc))
+        return None
 
 
 def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
@@ -169,6 +202,107 @@ def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
     # last_passing is non-None: all `runs` iterations passed
     assert last_passing is not None
     return last_passing
+
+
+def extract_failing_test(error_lines: list[str]) -> str | None:
+    """
+    Extract the specific failing test name from CI log error lines.
+
+    Looks for pytest-style failure lines like:
+        FAILED tests/test_foo.py::test_bar - AssertionError
+        tests/test_foo.py::test_bar FAILED
+
+    Returns the test node ID, or None if not found.
+    Never raises.
+    """
+    import re
+
+    patterns = [
+        re.compile(r"FAILED\s+([\w/\\.\-]+::[\w\[\]\-]+)"),
+        re.compile(r"([\w/\\.\-]+::[\w\[\]\-]+)\s+FAILED"),
+        re.compile(r"ERROR\s+([\w/\\.\-]+::[\w\[\]\-]+)"),
+    ]
+    for line in error_lines:
+        for pat in patterns:
+            m = pat.search(line)
+            if m:
+                return m.group(1)
+    return None
+
+
+def verify_pre_patch(fixture_path: Path, test_name: str) -> bool:
+    """
+    Verify that a specific test FAILS on the current (broken) code.
+    This is the "negative check" — confirms the test is a real signal.
+
+    Args:
+        fixture_path: Path to the fixture git repo.
+        test_name:    pytest node ID (e.g. "tests/test_foo.py::test_bar").
+
+    Returns:
+        True  → test fails as expected (negative check passes).
+        False → test passes on broken code (placebo/weak test — do NOT patch).
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-k", test_name, "--tb=no", "-q", "--no-header"],
+        cwd=fixture_path,
+        capture_output=True,
+        text=True,
+    )
+    # Non-zero exit code means test failed — which is what we WANT before patching
+    test_failed = result.returncode != 0
+    if not test_failed:
+        log.warning(
+            "regression.weak_test",
+            fixture=str(fixture_path),
+            test_name=test_name,
+        )
+    return test_failed
+
+
+def shadow_type_check(patched_file: Path) -> str:
+    """
+    Run mypy on the patched file to catch type violations introduced by the patch.
+
+    Args:
+        patched_file: Absolute path to the patched Python file.
+
+    Returns:
+        Error string if mypy finds violations, empty string on pass or if mypy
+        is not installed. Never raises.
+    """
+    if not str(patched_file).endswith(".py"):
+        return ""
+    if not patched_file.exists():
+        return ""
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "mypy",
+                "--check-untyped-defs",
+                "--no-error-summary",
+                str(patched_file),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            log.warning(
+                "regression.type_violation",
+                file=str(patched_file),
+                output=result.stdout[:200],
+            )
+            return result.stdout[:500] or result.stderr[:500]
+        return ""
+    except FileNotFoundError:
+        # mypy not installed — skip silently
+        return ""
+    except Exception as exc:
+        log.warning("regression.mypy_error", error=str(exc))
+        return ""
 
 
 def check_regression(before: TestReport, after: TestReport) -> bool:

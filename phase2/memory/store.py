@@ -47,6 +47,9 @@ class MemoryEntry(BaseModel):
     error: str = ""
     test_summary: str = ""     # e.g. "12 passed, 0 failed" — for weak-success filtering (C0)
     rejection_reason: str = "" # E1 — why rejected: prompt_issue|context_issue|logic_issue|size_issue|security_issue|unknown
+    diagnosis: str = ""        # D1 — Agent-Y one-sentence diagnosis: what is broken and why
+    pr_url: str = ""           # D1 — GitHub PR URL (set after create_pr succeeds)
+    issue_url: str = ""        # D1 — GitHub Issue URL (set after open_structural_issue succeeds)
 
 
 # ---------------------------------------------------------------------------

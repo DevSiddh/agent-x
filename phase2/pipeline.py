@@ -35,7 +35,15 @@ from agent_y.reasoner import ReasonerError, reason
 from phase1.log_fetcher.cleaner import clean_and_extract
 from phase2.classifier.regex_pass import ClassifierResult, classify, classify_with_fallback
 from phase2.classifier.safety_gate import check as gate_check
-from phase2.executor.regression import TestReport, check_regression, run_tests, run_tests_stable
+from phase2.executor.regression import (
+    TestReport,
+    check_regression,
+    extract_failing_test,
+    run_tests,
+    run_tests_stable,
+    shadow_type_check,
+    verify_pre_patch,
+)
 from phase2.executor.runner import apply_patch, check_syntax, rollback
 from phase2.memory.store import MemoryEntry, append, build_default_entry
 from phase2.patch_gen.sanitiser import validate_patch
@@ -239,7 +247,7 @@ def run(case_id: str) -> MemoryEntry:
                     "model_used": "gateway",
                     "test_summary": f"{gw_after.total} total, {len(gw_after.failed_tests)} failed",
                 })
-                sampler.update(classifier_result.bug_signature, accepted=True)
+                sampler.update(f"{classifier_result.category}_{classifier_result.ecosystem}", accepted=True)
                 rollback(fixture_path)
                 return outcome
             log.warning("gateway.tests_failed", case_id=case_id, rule=gw_result.matched_rule)
@@ -272,7 +280,7 @@ def run(case_id: str) -> MemoryEntry:
                         "model_used": "memory_reuse",
                         "test_summary": f"{after_reuse.total} total, {len(after_reuse.failed_tests)} failed",
                     })
-                    sampler.update(classifier_result.bug_signature, accepted=True)
+                    sampler.update(f"{classifier_result.category}_{classifier_result.ecosystem}", accepted=True)
                     rollback(fixture_path)
                     return outcome
             # Reuse failed — fall through to full pipeline
@@ -280,7 +288,7 @@ def run(case_id: str) -> MemoryEntry:
             rollback(fixture_path)
 
         # Thompson Sampling: score this arm before attempting fix
-        exploration_score = sampler.sample(classifier_result.bug_signature)
+        exploration_score = sampler.sample(f"{classifier_result.category}_{classifier_result.ecosystem}")
         log.info(
             "thompson.exploration_score",
             case_id=case_id,
@@ -294,6 +302,7 @@ def run(case_id: str) -> MemoryEntry:
         context = build_context(classifier_result, fixture_path, error_lines=cleaned)
 
         # 5.5 — Agent-Y Reasoner (optional — fallback to raw context on failure)
+        _diagnosis = ""
         try:
             reasoner_output = reason(context, classifier_result)
             log.info(
@@ -303,9 +312,22 @@ def run(case_id: str) -> MemoryEntry:
                 confidence=reasoner_output.confidence,
             )
             enriched_context = context + "\n\nSTRATEGY: " + reasoner_output.strategy
+            _diagnosis = reasoner_output.diagnosis
         except (ReasonerError, EnvironmentError) as exc:
             log.warning("reasoner.fallback", case_id=case_id, error=str(exc))
             enriched_context = context  # Agent-X baseline — pipeline continues
+
+        # 5.8 — Negative check: confirm the failing test actually FAILS before patching
+        _failing_test = extract_failing_test(cleaned)
+        if _failing_test:
+            _pre_ok = verify_pre_patch(fixture_path, _failing_test)
+            if not _pre_ok:
+                log.warning("pipeline.placebo_test", case_id=case_id, test=_failing_test)
+                outcome = outcome.model_copy(update={
+                    "decision": "abstained",
+                    "error": f"weak_test: {_failing_test} passes on broken code",
+                })
+                return outcome
 
         # 6 — Run tests BEFORE patch (regression baseline)
         before: TestReport = run_tests(fixture_path)
@@ -331,8 +353,20 @@ def run(case_id: str) -> MemoryEntry:
                 case_id=case_id,
                 reason="exceeded line limit on all retries",
             )
-            outcome = outcome.model_copy(update={"decision": "structural"})
-            sampler.update(classifier_result.bug_signature, accepted=False, penalty=5)
+            outcome = outcome.model_copy(update={"decision": "structural", "diagnosis": _diagnosis})
+            sampler.update(f"{classifier_result.category}_{classifier_result.ecosystem}", accepted=False, penalty=5)
+            # Open GitHub Issue for structural escalation
+            if REPO != "synthetic":
+                from phase2.tools.pr_creator import open_structural_issue
+                _issue = open_structural_issue(
+                    repo=REPO,
+                    run_id=run_id,
+                    category=classifier_result.category,
+                    affected_file=classifier_result.affected_file,
+                    reason="Patch exceeded 15-line limit on all 3 retries — requires architectural change",
+                )
+                if _issue:
+                    outcome = outcome.model_copy(update={"issue_url": _issue.issue_url})
             return outcome
 
         # 7.2 — Bandit security gate (PostSafetyValidation)
@@ -351,7 +385,20 @@ def run(case_id: str) -> MemoryEntry:
         if _radon_risk:
             log.warning("doctor.architecture_risk", case_id=case_id, complexity=_radon_risk)
             outcome = outcome.model_copy(update={"decision": "structural"})
-            sampler.update(classifier_result.bug_signature, accepted=False, penalty=5)
+            sampler.update(f"{classifier_result.category}_{classifier_result.ecosystem}", accepted=False, penalty=5)
+            return outcome
+
+        # 7.5 — Security gate: secret scan + CVE check on patch
+        from phase2.executor.security_gate import scan_patch
+        _reqs_modified = "requirements.txt" in diff
+        _sec_result = scan_patch(diff, requirements_modified=_reqs_modified)
+        if not _sec_result.passed:
+            log.warning("security.patch_rejected", case_id=case_id, reason=_sec_result.reason)
+            outcome = outcome.model_copy(update={
+                "decision": "rejected",
+                "rejection_reason": "security_issue",
+                "error": _sec_result.reason,
+            })
             return outcome
 
         # 8 — Executor: git apply
@@ -380,6 +427,20 @@ def run(case_id: str) -> MemoryEntry:
             })
             return outcome
 
+        # 8.7 — Shadow type check: mypy on patched file (skip silently if mypy missing)
+        _patched_file = fixture_path / classifier_result.affected_file
+        _type_err = shadow_type_check(_patched_file)
+        if _type_err:
+            rollback(fixture_path)
+            log.warning("pipeline.type_violation", case_id=case_id, error=_type_err[:200])
+            outcome = outcome.model_copy(update={
+                "decision": "rejected",
+                "rejection_reason": "logic_issue",
+                "sandbox_result": "fail",
+                "error": f"mypy: {_type_err[:200]}",
+            })
+            return outcome
+
         # 9 — RegressionCheck (multi-run stable: all 3 runs must pass)
         after: TestReport = run_tests_stable(fixture_path)
         if after.note == "flaky":
@@ -403,6 +464,7 @@ def run(case_id: str) -> MemoryEntry:
         # 10 — DecisionEngine
         outcome = outcome.model_copy(update={
             "test_summary": f"{after.total} total, {len(after.failed_tests)} failed",
+            "diagnosis": _diagnosis,
         })
         if after.passed:
             outcome = outcome.model_copy(update={"decision": "accepted"})
@@ -416,9 +478,29 @@ def run(case_id: str) -> MemoryEntry:
 
         # 10.5 — Thompson update: feed outcome back to sampler
         sampler.update(
-            classifier_result.bug_signature,
+            f"{classifier_result.category}_{classifier_result.ecosystem}",
             accepted=(outcome.decision == "accepted"),
         )
+
+        # 10.6 — Auto-PR: open Draft PR on GitHub for accepted fixes
+        if outcome.decision == "accepted" and REPO != "synthetic":
+            from phase2.tools.pr_creator import create_pr
+            _pr_result = create_pr(
+                repo=REPO,
+                patch=outcome.patch_applied,
+                affected_file=classifier_result.affected_file,
+                run_id=run_id,
+                bug_signature=classifier_result.bug_signature,
+                category=classifier_result.category,
+                test_summary=outcome.test_summary,
+                diagnosis=_diagnosis,
+                confidence=classifier_result.confidence,
+            )
+            if _pr_result:
+                outcome = outcome.model_copy(update={"pr_url": _pr_result.pr_url})
+                log.info("pipeline.pr_opened", pr_url=_pr_result.pr_url)
+            else:
+                log.warning("pipeline.pr_skipped", case_id=case_id)
 
         # Rollback fixture so it stays clean for re-runs
         rollback(fixture_path)

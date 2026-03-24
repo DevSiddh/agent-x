@@ -52,6 +52,7 @@ def make_valid_json(
         "strategy": strategy,
         "confidence": confidence,
         "files_to_change": files or ["requirements.txt"],
+        "diagnosis": "Missing package caused import to fail at runtime.",
     })
 
 
@@ -344,6 +345,7 @@ class TestReasonRetry:
             "strategy": "rename the variable to snake_case",
             "confidence": 0.8,
             "files_to_change": ["requirements.txt"],
+            "diagnosis": "Wrong variable name used.",
         })
 
         mock_client = make_mock_client(bad_strategy_json)

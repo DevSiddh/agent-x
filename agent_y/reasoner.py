@@ -43,7 +43,8 @@ Required JSON schema (all fields mandatory):
   "reasoning": "why this strategy was selected (1-2 sentences)",
   "strategy": "concrete fix approach — specific to the error, not generic",
   "confidence": 0.0 to 1.0,
-  "files_to_change": ["list", "of", "file", "paths"] (max 3 files)
+  "files_to_change": ["list", "of", "file", "paths"] (max 3 files),
+  "diagnosis": "one sentence: what is broken and why (plain English, no jargon)"
 }
 
 Rules:
@@ -51,6 +52,7 @@ Rules:
 - strategy must be specific to the error type — not generic advice
 - files_to_change must only include files mentioned in the error context (max 3)
 - confidence is your internal estimate — float between 0.0 and 1.0
+- diagnosis must be plain English, max 200 chars, no code snippets
 - Do NOT generate code or patches — reasoning and strategy only"""
 
 
@@ -65,6 +67,7 @@ class ReasonerOutput(BaseModel):
     strategy: str
     confidence: float = Field(ge=0.0, le=1.0)
     files_to_change: list[str]
+    diagnosis: str = ""  # 1 sentence: what is broken and why (plain English)
 
     @field_validator("files_to_change")
     @classmethod
@@ -78,6 +81,13 @@ class ReasonerOutput(BaseModel):
     def strategy_non_empty(cls, v: str) -> str:
         if not v or len(v.strip()) < 5:
             raise ValueError("strategy must be a non-empty, meaningful string")
+        return v
+
+    @field_validator("diagnosis")
+    @classmethod
+    def diagnosis_max_length(cls, v: str) -> str:
+        if len(v) > 200:
+            return v[:200]
         return v
 
 
@@ -197,7 +207,7 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
             parsed = _extract_json(raw)
 
             # Validate all required keys present
-            required = {"action", "reasoning", "strategy", "confidence", "files_to_change"}
+            required = {"action", "reasoning", "strategy", "confidence", "files_to_change", "diagnosis"}
             missing = required - set(parsed.keys())
             if missing:
                 raise KeyError(f"Missing keys: {missing}")
@@ -220,6 +230,7 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
                 strategy=strategy,
                 confidence=float(parsed["confidence"]),
                 files_to_change=files,
+                diagnosis=str(parsed.get("diagnosis", "")),
             )
 
             # confidence logged as metadata only — never used in decisions (P3)
