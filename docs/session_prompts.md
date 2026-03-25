@@ -58,5 +58,7 @@
 | step D1     | v22_steps.md                | DONE     |
 | step E0     | v23_analytics.md            | DONE     |
 | step E2     | v23_analytics.md            | PENDING (gate: 3+ repos) |
+| step Y-C0   | v30_creation_steps.md (TBD) | PENDING  |
+| step X-C0   | v30_creation_steps.md (TBD) | PENDING  |
 | step A4     | v1_steps_9_14.md            | TRIGGER  |
 | audit       | audit.md                    | ALWAYS   |

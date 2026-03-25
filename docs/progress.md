@@ -401,6 +401,23 @@ Dashboard shows live pipeline stats. Rejection patterns identified and classifie
 
 ---
 
+## v3.0 Creation Mode — New Gaps (identified 2026-03-25)
+
+These gaps block v4.1 (idea in → working repo out). All other v3.0 infrastructure is designed in vision.md.
+
+| Gap | File | Status |
+|-----|------|--------|
+| Agent-Y creation mode (new system prompt + build action) | agent_y/reasoner.py | PENDING — Step Y-C0 |
+| Agent-X task mode (write_file, not just git apply) | phase2/executor/runner.py | PENDING — Step X-C0 |
+| Acceptance criteria for new files | phase2/executor/regression.py | PENDING — minor add to Step X-C0 |
+| RAG creation patterns | memory.jsonl (data only) | READY — no code needed, populate via creation runs |
+
+NOTE (2026-03-25): Fine-tuning (v4.0) is an optimization (cost/speed), NOT a requirement for v4.1.
+DeepSeek API + Agent-Y + Agent-X + Agentic RAG achieves the full vision without fine-tuning.
+Fine-tuning reduces API cost and improves constraint compliance ~15-20%.
+
+---
+
 ### v2.1.6 Done Condition
 Executor runs correct test runner per language. JS/PHP/SQL fixes validated. Visual regressions caught by Playwright before accepting frontend fixes.
 

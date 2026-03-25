@@ -74,8 +74,10 @@ v2.2   → Context tools: file tree + web reader + GitHub search + PDF summarize
 v2.2   → Auto-PR (needs 20+ real accepted fixes)  [LOCKED — data gate]
 v2.3 → Multi-repo support                       [after v2.2]
 v3.0 → Plan + Task queue: Y designs, X executes, feedback loop
+v3.0.1 → Agent-Y creation mode: new system prompt + "build" action (Step Y-C0)
+v3.0.2 → Agent-X task mode: write_file() capability, not just git apply (Step X-C0)
 v3.1 → Project memory: goal + architecture + progress state
-v4.0 → Fine-tune local model on prompt stack (distillation)
+v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out
 
 ## ENFORCEMENT RULE
