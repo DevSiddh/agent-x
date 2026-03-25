@@ -69,15 +69,19 @@ v1.2 → Patch quality fix (5/5 accepted)         [DONE — Step 10]
 v1.3 → Thompson Sampling                         [DONE — Step 11]
 v1.4 → Claude Code hooks + rules                [DONE — Steps 12-14]
 v2.0 → Agent-Y reasoning layer                  [DONE — Steps A0-A3]
-v2.1 → Real GitHub webhook integration          [IN PROGRESS — Step B0 READY]
-v2.1.5 → Memory Engine + Pipeline Hardening    [PENDING — after B3 — Steps C0-C2]
-v2.1.6 → Multi-language executor + classifier + log cleaner + Playwright  [PENDING — Steps C3-C4]
-v2.2   → Context tools: file tree + web reader + GitHub search + PDF summarizer [PENDING — Step D0]
-v2.2   → Auto-PR (needs 20+ real accepted fixes)  [LOCKED — data gate]
-v2.3 → Multi-repo support                       [after v2.2]
+v2.1 → Real GitHub webhook integration          [DONE — Steps B0-B3]
+v2.1.5 → Memory Engine + Pipeline Hardening    [DONE — Steps C0-C2]
+v2.1.6 → Multi-language executor + audit fixes  [DONE — Steps C3+AUDIT+C3b]
+v2.2   → Context tools + auto-PR               [DONE — Steps D0-D1]
+v2.3   → Analytics + failure learning          [DONE — Steps E0-E1]
 v3.0 → Plan + Task queue: Y designs, X executes, feedback loop
-v3.0.1 → Agent-Y creation mode: new system prompt + "build" action (Step Y-C0)
-v3.0.2 → Agent-X task mode: write_file() capability, not just git apply (Step X-C0)
+v3.0.1 → Agent-Y creation mode: schemas + plan_goal() + replan() (Step Y-C0)
+v3.0.2 → Agent-X task mode: write_file() + Orchestrator + StateManager (Step X-C0)
+v3.0.3 → Bayesian Skill Vault + Best-of-N sampling (Step Y-C1):
+         - skill_vault.jsonl: Beta(α,β) per skill, Thompson sampled
+         - Best-of-N: n=1 first attempt, n=3 on retry (sequential, stop at first pass)
+         - Auto skill generation: retrospective when failed_attempts >= 2 then succeeded
+         - Gate: α+β >= 7 before Thompson score trusted (uniform prior until then)
 v3.0 Hard Rules (locked 2026-03-25):
 - Orchestrator atomic write: state_tmp.json → rename, never direct json.dump to state.json
 - Agent-Y called ONLY when: plan empty OR failed_task_streak == 2

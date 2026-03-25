@@ -1,4 +1,4 @@
-# Agent-X v3.0 | Steps Y-C0, X-C0 (PENDING — after E2)
+# Agent-X v3.0 | Steps Y-C0, X-C0, Y-C1
 # Creation Mode: Agent-Y plans, Agent-X builds new files (not just patches)
 # Last updated: 2026-03-25
 # Architecture locked: 2026-03-25 (Gemini staff engineer review)
@@ -58,6 +58,7 @@ BUILD THIS STEP:
        depends_on: list[str] = []
        status: Literal["pending", "in_progress", "completed", "failed", "blocked"] = "pending"
        failed_attempts: int = 0
+       variations_tried: int = 0  # Best-of-N: how many variants attempted before pass
 
    class SharedState(BaseModel):
        project_id: str
@@ -343,4 +344,158 @@ DONE WHEN:
 - State written atomically — state_tmp.json → state.json (verified by test)
 - global_interfaces updated after every successful task (verified by test)
 - docs/progress.md updated: Step X-C0 DONE — v3.0 COMPLETE
+```
+
+---
+
+## STEP Y-C1 — Bayesian Skill Vault + Best-of-N Sampling
+# Prerequisite: Step X-C0 DONE (Orchestrator must exist).
+# Adds: skill_vault.jsonl, SkillVault class, retrospective skill generation, Best-of-N execution.
+
+```
+You are building Agent-X v3.1 — Bayesian Skill Vault + Best-of-N.
+Read CLAUDE.md, docs/progress.md before touching anything.
+Step X-C0 must be DONE. Do not break existing tests.
+
+CONTEXT:
+Agent-Y currently injects skill context based on keyword matching only.
+This step makes skills LEARN — each skill tracks Beta(α,β) and is sampled
+via Thompson Sampling. Skills are auto-generated from successful replans.
+Best-of-N upgrades the Orchestrator to try n=3 variations on retry, stopping
+at first pass — Karpathy test-time compute on a 2GB VPS budget.
+
+BUILD THIS STEP:
+
+1. memory/skill_vault.jsonl — NEW FILE (empty on creation)
+   Schema per entry (one JSON object per line):
+   {
+     "skill_id": str,           # e.g. "avoid_circular_imports_fastapi"
+     "constraint_text": str,    # the generalized rule to inject
+     "domain_tags": list[str],  # e.g. ["fastapi", "pydantic"]
+     "embedding": list[float],  # Jina vector — reuse _get_embedding_model() from similarity.py
+     "alpha": int,              # Beta dist wins (starts at 1)
+     "beta": int,               # Beta dist losses (starts at 1)
+     "source": str,             # "project_slug:task_id" provenance
+     "created_at": str          # ISO date
+   }
+
+2. phase2/skills/__init__.py — empty package
+
+3. phase2/skills/vault.py — NEW FILE
+   Reuses: ThompsonSampler from phase2/strategy/thompson.py (arm_key = skill_id)
+   Reuses: _get_embedding_model() from phase2/memory/similarity.py
+
+   class SkillEntry(BaseModel):
+       skill_id: str
+       constraint_text: str
+       domain_tags: list[str] = []
+       embedding: list[float] = []
+       alpha: int = 1
+       beta: int = 1
+       source: str = ""
+       created_at: str = ""
+
+   class SkillVault:
+       VAULT_PATH = Path("memory/skill_vault.jsonl")
+       SKILL_STATE_PATH = Path("memory/skill_state.json")
+       TRUST_GATE = 7  # α+β must reach 7 before Thompson score is used
+
+       def find_relevant(self, goal: str, k: int = 10) -> list[SkillEntry]:
+           # embed goal via _get_embedding_model() (lazy, never raises)
+           # cosine similarity against all skill embeddings
+           # return top-k by similarity
+           # if model unavailable → return all skills up to k (graceful fallback)
+
+       def sample_top(self, skills: list[SkillEntry], n: int = 3) -> list[SkillEntry]:
+           # for each skill: if α+β >= TRUST_GATE → ThompsonSampler.sample(skill_id)
+           #                 else → score = 0.5 (equal probability before gate)
+           # sort by score descending → return top n
+
+       def update(self, skill_ids: list[str], won: bool) -> None:
+           # ThompsonSampler.update(skill_id, won) for each
+           # never raises
+
+       def add_skill(self, entry: SkillEntry) -> None:
+           # append to skill_vault.jsonl
+           # init arm in ThompsonSampler with alpha=1, beta=1
+           # embed if embedding is empty (lazy embed on add)
+           # never raises — log error and return on failure
+
+       def get_context_block(self, goal: str) -> str:
+           # find_relevant() → sample_top() → format as:
+           # "[SKILL: skill_id]\n{constraint_text}\n" for each
+           # returns "" if vault is empty (never raises)
+
+   __main__ smoke test: create vault, add_skill, find_relevant, sample_top.
+
+4. agent_y/retrospective.py — NEW FILE
+   Fires when: task.failed_attempts >= 2 AND task.status == "completed"
+   (Task eventually succeeded after struggle — worth abstracting)
+
+   def generate_skill(
+       state: SharedState,
+       failed_task: Task,
+       failed_diffs: list[str],   # diffs from failed attempts
+       winning_diff: str,          # the diff that passed
+   ) -> SkillEntry | None:
+       """
+       Calls deepseek-reasoner with prompt:
+         "Here are {n} failed diffs and 1 winning diff for task: {description}.
+          Abstract the winning pivot into a generalized constraint for future tasks.
+          Do NOT include specific variable names or file paths.
+          Output JSON only: {skill_id, constraint_text, domain_tags}"
+       Returns None if Agent-Y cannot generalize (invalid JSON or empty constraint).
+       Never raises. structlog: retrospective.ok / retrospective.skip / retrospective.error
+       """
+
+5. phase3/orchestrator.py — ADD Best-of-N to run_once()
+
+   Best-of-N rules (locked):
+   - First attempt: n=1, temperature=0.4 (deterministic — save API cost)
+   - On first failure: retry with n=3, temperature=0.8 (creative variants)
+   - Sequential execution: apply variant 1 → test → if pass STOP
+                           else rollback() → apply variant 2 → test → if pass STOP
+                           else rollback() → apply variant 3 → test → if pass STOP
+                           else → mark_failed
+   - task.variations_tried incremented for each variant attempted
+   - Skill vault updated ONCE per task outcome (not per variant)
+   - rollback() = existing runner.rollback() — git checkout -- . (NOT git reset --hard)
+
+   API call for n=3:
+       response = client.chat.completions.create(
+           model="deepseek-chat",
+           messages=messages,
+           temperature=0.8,
+           n=3,
+       )
+       variations = [c.message.content for c in response.choices]
+
+   Wire retrospective into post-task-success flow (after global_interfaces update):
+       if task.failed_attempts >= 2 and task.status == "completed":
+           skill = retrospective.generate_skill(state, task, failed_diffs, winning_diff)
+           if skill:
+               vault.add_skill(skill)
+
+6. tests/test_skill_vault.py — NEW FILE
+   - Test find_relevant: mock embedding model → cosine ranking works
+   - Test find_relevant: model unavailable → returns all skills up to k
+   - Test sample_top: skill below TRUST_GATE → score 0.5 (equal weight)
+   - Test sample_top: skill above TRUST_GATE → Thompson score used
+   - Test update: win → alpha+1; loss → beta+1
+   - Test add_skill: persists to skill_vault.jsonl + inits Thompson arm
+   - Test get_context_block: empty vault → returns ""
+   - Test generate_skill: valid LLM response → SkillEntry returned
+   - Test generate_skill: invalid JSON → returns None (never raises)
+   - Test Best-of-N: variation 1 fails → rollback called → variation 2 tried
+   - Test Best-of-N: variation 1 passes → stop (variations 2+3 not tried)
+   - Test retrospective wire: failed_attempts >= 2 + completed → generate_skill called
+
+DONE WHEN:
+- pytest tests/ → all pass (zero regressions from existing suite)
+- pytest tests/test_skill_vault.py → all new tests pass
+- skill_vault.jsonl created (empty)
+- skill_state.json created after first update()
+- Best-of-N loop in orchestrator verified by tests
+- Retrospective fires correctly on failed_attempts >= 2 tasks
+- docs/progress.md updated: Step Y-C1 DONE
 ```

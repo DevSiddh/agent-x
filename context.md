@@ -77,8 +77,4 @@ agent-x/
 problems + solutions → docs/problems_and_solutions.md
 build roadmap        → docs/roadmap.md
 module details       → docs/modules/<name>.md
-
-## Env Variables
-GITHUB_TOKEN, GITHUB_WEBHOOK_SECRET, DEEPSEEK_API_KEY
-CONFIDENCE_THRESHOLD=0.85, CHURN_THRESHOLD=15, MAX_RETRIES=3
-CI_POLL_TIMEOUT=300, ERROR_WINDOW_LINES=50, WEBHOOK_PORT=8080
+env variables        → .env.example
