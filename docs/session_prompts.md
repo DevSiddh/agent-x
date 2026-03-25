@@ -3,9 +3,9 @@
 
 ---
 
-## ⚡ NEXT STEP: X-C0
+## ⚡ NEXT STEP: Y-C1
 # DO THIS AND NOTHING ELSE.
-# Say "step X-C0" → read v30_creation_steps.md → execute → update progress.md → STOP.
+# Say "step Y-C1" → read v30_creation_steps.md → execute → update progress.md → STOP.
 # Do NOT look at GATED section. Do NOT start any other step.
 
 ---
@@ -15,8 +15,8 @@
 | Priority | Step | File | Status |
 |----------|------|------|--------|
 | ✅ DONE | step Y-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
-| 1 — DO NOW | step X-C0 | v30_creation_steps.md | PENDING |
-| 2 | step Y-C1 | v30_creation_steps.md | PENDING — after X-C0 |
+| ✅ DONE | step X-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
+| 1 — DO NOW | step Y-C1 | v30_creation_steps.md | PENDING |
 
 ---
 

@@ -12,6 +12,7 @@ import structlog
 from openai import OpenAI
 from pydantic import BaseModel, Field, field_validator
 
+from agent_y.schemas import ReplanResponse, SharedState, Task
 from phase2.classifier.regex_pass import ClassifierResult
 
 log = structlog.get_logger()
@@ -62,7 +63,7 @@ Rules:
 
 
 class ReasonerOutput(BaseModel):
-    action: Literal["repair", "observe", "escalate"]
+    action: Literal["repair", "observe", "escalate", "plan", "next_task", "replan"]
     reasoning: str
     strategy: str
     confidence: float = Field(ge=0.0, le=1.0)
@@ -259,6 +260,238 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
         f"Reasoner exhausted {MAX_RETRIES} retries for category={category}. "
         f"Last error: {last_error}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Creation mode — prompts + functions
+# ---------------------------------------------------------------------------
+
+CREATION_SYSTEM_PROMPT = """You are a planning engine for an autonomous software engineer.
+Break a goal into ordered tasks. Each task must:
+- Touch ≤ 3 files (files_to_touch max 3 items)
+- Have exactly 3 acceptance criteria cases: a Happy Path case, an Edge Case, and an Error Case
+- Be atomic and independently testable
+
+Output valid JSON only. Start with { and nothing else before it.
+
+Required JSON schema:
+{
+  "tasks": [
+    {
+      "task_id": "T1",
+      "action": "scaffold" | "write_file" | "file_edit" | "run_tests",
+      "description": "what this task does",
+      "files_to_touch": ["file.py"],
+      "patch_order": ["file.py"],
+      "acceptance_criteria": {
+        "target_function": "function_name",
+        "cases": [
+          {"inputs": ["arg1"], "expected": "result"},
+          {"inputs": ["edge_input"], "expected": "edge_result"},
+          {"inputs": ["error_input"], "expected": "error_result"}
+        ]
+      },
+      "depends_on": []
+    }
+  ]
+}"""
+
+REPLAN_SYSTEM_PROMPT = """You are a root-cause analysis engine for a CI/CD self-healing system.
+A task has failed. Perform surgical sub-tasking ONLY.
+Replace the failed task with 2-3 smaller sub-tasks. Never rewrite the full plan.
+
+Output valid JSON only. Start with { and nothing else before it.
+
+Required JSON schema:
+{
+  "analysis": {
+    "root_cause_of_failure": "specific root cause (non-empty)",
+    "flaw_in_previous_approach": "what was wrong about the failed diff (non-empty)",
+    "explicit_pivot_strategy": "the new approach (non-empty)"
+  },
+  "new_sub_tasks": [
+    {
+      "task_id": "T1a",
+      "action": "write_file" | "file_edit" | "run_tests",
+      "description": "sub-task description",
+      "files_to_touch": ["file.py"],
+      "patch_order": ["file.py"],
+      "acceptance_criteria": {
+        "target_function": "function_name",
+        "cases": [
+          {"inputs": ["arg1"], "expected": "result"},
+          {"inputs": ["edge_input"], "expected": "edge_result"},
+          {"inputs": ["error_input"], "expected": "error_result"}
+        ]
+      },
+      "depends_on": []
+    }
+  ]
+}"""
+
+
+def plan_goal(goal: str, state: SharedState) -> list[Task]:
+    """
+    Plan a goal into ordered Tasks using deepseek-reasoner.
+
+    Args:
+        goal:  The high-level goal to plan.
+        state: Current SharedState (provides project context).
+
+    Returns:
+        Parsed list[Task] with validated acceptance criteria (min 3 cases each).
+
+    Raises:
+        ReasonerError: After 2 failed attempts (bad JSON or validation failure).
+    """
+    import os
+
+    def _get_api_key() -> str:
+        key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not key:
+            raise EnvironmentError("DEEPSEEK_API_KEY not set")
+        return key
+
+    client = OpenAI(api_key=_get_api_key(), base_url="https://api.deepseek.com")
+
+    user_prompt = (
+        f"Project: {state.project_slug}\n"
+        f"Goal: {goal}\n\n"
+        "Break this goal into ordered tasks. "
+        "Return ONLY the JSON object starting with {. No markdown. No explanation."
+    )
+    last_error = ""
+
+    for attempt in range(2):
+        if attempt > 0:
+            user_prompt = (
+                f"Your output was not valid JSON or failed validation. "
+                f"Error: {last_error}\n"
+                f"Return only the JSON object starting with {{. Goal: {goal}"
+            )
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-reasoner",
+                messages=[
+                    {"role": "system", "content": CREATION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=1000,
+            )
+            raw = response.choices[0].message.content or ""
+            parsed = _extract_json(raw)
+            tasks_data = parsed.get("tasks", [])
+            tasks = [Task(**t) for t in tasks_data]  # Pydantic validates each Task
+
+            log.info("reasoner.plan_goal.ok", goal=goal[:60], task_count=len(tasks))
+            return tasks
+
+        except Exception as exc:
+            last_error = str(exc)
+            log.warning(
+                "reasoner.plan_goal.retry",
+                attempt=attempt,
+                error=last_error,
+                goal=goal[:60],
+            )
+
+    log.error("reasoner.plan_goal.error", goal=goal[:60], error=last_error)
+    raise ReasonerError(f"plan_goal failed after 2 attempts. Last error: {last_error}")
+
+
+def replan(
+    state: SharedState,
+    failed_task: Task,
+    failure_type: str,
+    error_output: str,
+    failed_diff: str,
+    thompson_note: str,
+) -> ReplanResponse:
+    """
+    Surgical replan: replace a failed task with 2-3 sub-tasks.
+
+    Injects all 7 context fields into the prompt (exact order):
+    1. Failed task description
+    2. failure_type
+    3. Error output (last 20 lines)
+    4. files_to_touch
+    5. Failed acceptance cases
+    6. failed_diff
+    7. thompson_note
+
+    Returns:
+        ReplanResponse with validated non-empty analysis fields and new sub-tasks.
+
+    Raises:
+        ReasonerError: On parse failure or empty analysis fields.
+    """
+    import os
+
+    def _get_api_key() -> str:
+        key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not key:
+            raise EnvironmentError("DEEPSEEK_API_KEY not set")
+        return key
+
+    client = OpenAI(api_key=_get_api_key(), base_url="https://api.deepseek.com")
+
+    error_lines = error_output.strip().splitlines()
+    error_snippet = "\n".join(error_lines[-20:])
+
+    failed_cases_text = "\n".join(
+        f"  case {i}: inputs={c.inputs} expected={c.expected}"
+        for i, c in enumerate(failed_task.acceptance_criteria.cases)
+    )
+
+    user_prompt = (
+        f"Failed task description: {failed_task.description}\n"
+        f"Failure type: {failure_type}\n"
+        f"Error output (last 20 lines):\n{error_snippet}\n"
+        f"Files to touch: {failed_task.files_to_touch}\n"
+        f"Failed acceptance cases:\n{failed_cases_text}\n"
+        f"Failed diff:\n{failed_diff}\n"
+        f"Thompson note: {thompson_note}\n\n"
+        "Return ONLY the JSON object starting with {. No markdown."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=[
+                {"role": "system", "content": REPLAN_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=1000,
+        )
+        raw = response.choices[0].message.content or ""
+        parsed = _extract_json(raw)
+        result = ReplanResponse(**parsed)
+
+        # Validate all 3 analysis fields are non-empty
+        analysis = result.analysis
+        if not analysis.root_cause_of_failure.strip():
+            raise ValueError("root_cause_of_failure is empty")
+        if not analysis.flaw_in_previous_approach.strip():
+            raise ValueError("flaw_in_previous_approach is empty")
+        if not analysis.explicit_pivot_strategy.strip():
+            raise ValueError("explicit_pivot_strategy is empty")
+
+        log.info(
+            "reasoner.replan.ok",
+            task_id=failed_task.task_id,
+            new_task_count=len(result.new_sub_tasks),
+        )
+        return result
+
+    except Exception as exc:
+        log.error(
+            "reasoner.replan.error",
+            task_id=failed_task.task_id,
+            error=str(exc),
+        )
+        raise ReasonerError(
+            f"replan failed for task {failed_task.task_id}: {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------

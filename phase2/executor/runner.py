@@ -204,6 +204,55 @@ def check_syntax(fixture_path: Path, affected_file: str) -> str | None:
         return f"SyntaxError line {exc.lineno}: {exc.msg}"
 
 
+class RunResult(BaseModel):
+    """Result of a write_file() call."""
+    success: bool
+    error: str = ""
+
+
+def write_file(
+    file_path: Path,
+    content: str,
+    repo_path: Path,
+) -> RunResult:
+    """
+    Write new file content to disk.
+    Steps:
+      1. Validate 50-line limit
+      2. Create parent directories if missing
+      3. Write content to file_path
+      4. git add file_path (subprocess, cwd=repo_path)
+      5. Return RunResult(success=True)
+    Never raises. All errors → RunResult(success=False, error=str(e)).
+    structlog: executor.write_file.ok / executor.write_file.error
+    """
+    try:
+        lines = content.splitlines()
+        if len(lines) > 50:
+            log.warning(
+                "executor.write_file.error",
+                file=str(file_path),
+                lines=len(lines),
+                reason="exceeds 50-line limit",
+            )
+            return RunResult(success=False, error="write_file: exceeds 50-line limit")
+
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+
+        subprocess.run(
+            ["git", "add", str(file_path)],
+            cwd=repo_path,
+            capture_output=True,
+            check=True,
+        )
+        log.info("executor.write_file.ok", file=str(file_path), lines=len(lines))
+        return RunResult(success=True)
+    except Exception as exc:
+        log.error("executor.write_file.error", file=str(file_path), error=str(exc))
+        return RunResult(success=False, error=str(exc))
+
+
 def rollback(fixture_path: Path) -> None:
     """
     Restore fixture to last committed state.

@@ -1,0 +1,137 @@
+"""
+agent_y/schemas.py
+Pydantic v2 models for Agent-X v3.0 shared state and planning.
+Standalone — no imports from phase1/ phase2/ phase3/.
+"""
+
+import os
+from enum import Enum
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class AcceptanceCase(BaseModel):
+    """One I/O test case for a task's acceptance criteria."""
+
+    inputs: list[str]
+    expected: str
+
+
+class AcceptanceCriteria(BaseModel):
+    """Anti-reward-hacking gate: min 3 I/O pairs — Happy Path + Edge Case + Error Case."""
+
+    target_function: str
+    cases: list[AcceptanceCase] = Field(min_length=3)
+
+
+class ArtifactEntry(BaseModel):
+    """Tracks a file written by the pipeline with checksum for tamper detection."""
+
+    file: str
+    last_modified_task: str
+    checksum: str  # sha256 — verified before each task; halt if changed outside pipeline
+
+
+class TaskAction(str, Enum):
+    """Valid actions a task can perform."""
+
+    SCAFFOLD = "scaffold"
+    WRITE_FILE = "write_file"
+    FILE_EDIT = "file_edit"
+    RUN_TESTS = "run_tests"
+
+
+class Task(BaseModel):
+    """One atomic unit of work in the execution plan."""
+
+    task_id: str
+    action: TaskAction
+    description: str
+    files_to_touch: list[str] = Field(max_length=3)
+    patch_order: list[str] = []
+    acceptance_criteria: AcceptanceCriteria
+    depends_on: list[str] = []
+    status: Literal["pending", "in_progress", "completed", "failed", "blocked"] = "pending"
+    failed_attempts: int = 0
+    variations_tried: int = 0  # Best-of-N: how many variants attempted before pass
+
+
+class SharedState(BaseModel):
+    """Single source of truth for the orchestrator loop."""
+
+    project_id: str
+    project_slug: str  # e.g. "crypto-bot-v1" — WORKSPACE_ROOT resolves full path
+    goal: str
+    plan: list[Task]
+    current_task_id: str | None = None
+    failed_task_streak: int = 0
+    global_interfaces: dict[str, list[str]] = {}
+    artifacts: list[ArtifactEntry] = []
+
+
+class ReplanAnalysis(BaseModel):
+    """Forced root-cause analysis before any new sub-tasks are written."""
+
+    root_cause_of_failure: str
+    flaw_in_previous_approach: str
+    explicit_pivot_strategy: str
+
+
+class ReplanResponse(BaseModel):
+    """Surgical sub-tasking: failed task replaced by 2+ sub-tasks, never full rewrite."""
+
+    analysis: ReplanAnalysis
+    new_sub_tasks: list[Task]
+
+
+def resolve_safe_path(relative: str) -> Path:
+    """
+    Resolve a relative path within WORKSPACE_ROOT.
+    Raises PermissionError on path traversal (sandbox escape blocked).
+    """
+    root = Path(os.environ["WORKSPACE_ROOT"]).resolve()
+    full = (root / relative).resolve()
+    if not str(full).startswith(str(root)):
+        raise PermissionError(f"Sandbox escape blocked: {relative}")
+    return full
+
+
+if __name__ == "__main__":
+    # Smoke test: instantiate each model
+    _criteria = AcceptanceCriteria(
+        target_function="add",
+        cases=[
+            AcceptanceCase(inputs=["add(1, 2)"], expected="3"),
+            AcceptanceCase(inputs=["add(0, 0)"], expected="0"),
+            AcceptanceCase(inputs=["add(-1, 1)"], expected="0"),
+        ],
+    )
+    _task = Task(
+        task_id="T1",
+        action=TaskAction.WRITE_FILE,
+        description="Create add function",
+        files_to_touch=["app.py"],
+        acceptance_criteria=_criteria,
+    )
+    _state = SharedState(
+        project_id="proj-1",
+        project_slug="my-project",
+        goal="Build a calculator",
+        plan=[_task],
+    )
+    _analysis = ReplanAnalysis(
+        root_cause_of_failure="Wrong algorithm",
+        flaw_in_previous_approach="Used string concat instead of int add",
+        explicit_pivot_strategy="Use int() cast before addition",
+    )
+    _replan = ReplanResponse(analysis=_analysis, new_sub_tasks=[_task])
+    _artifact = ArtifactEntry(file="app.py", last_modified_task="T1", checksum="abc123")
+
+    print("=== schemas.py Smoke Test ===")
+    print(f"Task:          {_task.task_id} — {_task.action} — status: {_task.status}")
+    print(f"SharedState:   {_state.project_id} — goal: {_state.goal}")
+    print(f"ReplanResponse: {len(_replan.new_sub_tasks)} sub-task(s)")
+    print(f"ArtifactEntry: {_artifact.file} checksum={_artifact.checksum}")
+    print("PASSED")
