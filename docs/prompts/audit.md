@@ -91,6 +91,45 @@ WHAT TO AUDIT (in this order):
     - Is get_similar() doing a full file scan every call? (JSONL scan — acceptable for < 1000 entries)
     - Any unnecessary reads or writes in the hot path?
 
+11. v3.0 DOC CONSISTENCY (run when any v3.0 doc was changed)
+    Read these files: docs/prompts/v30_creation_steps.md, docs/progress.md, CLAUDE.md
+
+    SCHEMAS — check all 4 files agree on:
+    - SharedState has: project_id, project_slug, goal, plan[], current_task_id,
+      failed_task_streak, global_interfaces{}, artifacts[ArtifactEntry]
+    - ArtifactEntry has: file, last_modified_task, checksum
+    - Task has: task_id, action(TaskAction), description, files_to_touch(max 3),
+      patch_order, acceptance_criteria, depends_on, status, failed_attempts
+    - AcceptanceCriteria has: target_function, cases(min 3)
+    - TaskAction enum has: scaffold / write_file / file_edit / run_tests
+    - ReplanAnalysis has: root_cause_of_failure, flaw_in_previous_approach, explicit_pivot_strategy
+    - ReplanResponse has: analysis(ReplanAnalysis), new_sub_tasks[]
+
+    ORCHESTRATOR RULES — check all locked decisions are documented:
+    - Atomic write: state_tmp.json → rename state.json
+    - Agent-Y called ONLY on: empty plan OR failed_task_streak == 2
+    - ast_mapper runs on files_to_touch only (not whole repo)
+    - global_interfaces updated after EVERY task success
+    - T0 always scaffold task
+    - WORKSPACE_ROOT in .env only (never in SharedState)
+    - resolve_safe_path() guardrail mentioned
+    - file_edit for modifications, write_file for new files only
+
+    ANTI-CHEAT — check these are documented:
+    - AcceptanceCriteria min 3 cases enforced by Pydantic
+    - Test written FIRST (parametrize), implementation second
+    - 15-line limit applies to test files
+
+    REPLAN — check these are documented:
+    - Inject failed diff into replan context
+    - Inject Thompson history into replan context
+    - Surgical sub-tasking only (never full plan rewrite)
+    - Strategy Pivot Contract: fill ReplanAnalysis before new tasks
+
+    FLAG any schema field that appears in one doc but not others.
+    FLAG any rule in CLAUDE.md that contradicts v30_creation_steps.md.
+    FLAG any step in session_prompts.md pointing to a file that doesn't exist.
+
 ---
 
 OUTPUT FORMAT:

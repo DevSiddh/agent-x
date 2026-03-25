@@ -976,7 +976,7 @@ v1.1 unlocked: local model (Ollama + Qwen2.5-7B) for Agent-Y reasoning
 ### Schemas Locked
 - Task: task_id, description, files_to_touch (max 3), patch_order, acceptance_criteria, depends_on, status, failed_attempts
 - AcceptanceCriteria: target_function + cases (min 3 I/O pairs)
-- SharedState: project_id, goal, plan[], current_task_id, failed_task_streak, global_interfaces{}, artifacts[]
+- SharedState: project_id, project_slug, goal, plan[], current_task_id, failed_task_streak, global_interfaces{}, artifacts[]
 - ReplanAnalysis: root_cause_of_failure + flaw_in_previous_approach + explicit_pivot_strategy
 - ReplanResponse: analysis (ReplanAnalysis) + new_sub_tasks[] (surgical, never full rewrite)
 

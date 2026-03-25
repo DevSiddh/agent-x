@@ -30,16 +30,18 @@ User gives an idea → Agent-Y thinks, designs, architects, breaks into tasks
 → loop until done. CI/CD repair is just the first proving ground.
 Full vision → @docs/vision.md
 
-## Current Build Status (2026-03-20) — v2.1 IN PROGRESS
-206 tests passing — memory.jsonl has 51+ entries — thompson_state.json active
-v2.1 dev environment set up — live webhook event queued — Step B0 READY
+## Current Build Status (2026-03-25) — v3.0 NEXT
+491 tests passing — memory.jsonl 406+ entries — thompson_state.json active
+v2.1 B0-B3 DONE — v2.2 D0+D1 DONE — v2.3 E0+E1 DONE — Step Y-C0 READY
 Full step history → @docs/progress.md
 
 ## Pipeline (strict order — do not change)
 Observer → LogParser → RegexClassifier → PreSafetyGate
-→ ThompsonSampler.sample() → ContextBuilder → DeepSeekWorker → PostSafetyValidation
-→ Sanitiser → Executor → RegressionCheck → DecisionEngine
-→ ThompsonSampler.update() → MemoryStore
+→ Gateway → MemoryReuse → ThompsonSampler.sample()
+→ ContextBuilder → Agent-Y Reasoner → NegativeCheck → BaselineTests
+→ DeepSeekWorker → Bandit → Radon → SecurityGate
+→ Executor → SyntaxReflex → ShadowTypeCheck → RegressionCheck
+→ DecisionEngine → ThompsonSampler.update() → AutoPR → MemoryStore
 
 ## Hard Rules (no exceptions)
 1. confidence < 0.85 → observer mode, pipeline STOPS
