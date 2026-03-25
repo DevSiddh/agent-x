@@ -20,7 +20,7 @@
   subprocess.run(["pytest", "tests/", "--tb=short", "--json-report",
                   "--json-report-file=report.json"], cwd=fixture_path)
   ```
-- **Status:** PENDING — will implement in phase2/executor/
+- **Status:** FIXED — Step 5 (runner.py uses subprocess git apply)
 
 ---
 
@@ -40,7 +40,7 @@
   └── syn_005/  scripts/restart.sh missing pkill + cache clear
   ```
   Each fixture is a real git repo (git init + initial commit) so patches apply cleanly.
-- **Status:** PENDING — build before executor tests
+- **Status:** FIXED — Step 0 (fixtures/syn_001..005 created)
 
 ---
 
@@ -65,7 +65,7 @@
               return "\n".join(text.splitlines()[i:])
       return text
   ```
-- **Status:** PENDING — implement in sanitiser.py
+- **Status:** FIXED — Step 4 (sanitiser.py + worker.py system prompt)
 
 ---
 
@@ -82,7 +82,7 @@
           raise EnvironmentError("GITHUB_TOKEN not set")
       return token
   ```
-- **Status:** PENDING — fix when fetcher.py is rebuilt
+- **Status:** FIXED — Step 2 (lazy _get_token() in fetcher.py)
 
 ---
 
@@ -120,7 +120,7 @@
                       return True
       return False
   ```
-- **Status:** PENDING — implement in memory store
+- **Status:** FIXED — Step 6 (store.py dedup on repo+bug_signature)
 
 ---
 
@@ -138,7 +138,7 @@
   # if new_failures > 0 → regression = True → rollback
   ```
   Dependency: add `pytest-json-report` to requirements.txt
-- **Status:** PENDING — implement in regression.py
+- **Status:** FIXED — Step 5 (regression.py uses pytest-json-report before/after diff)
 
 ---
 
@@ -158,7 +158,7 @@
   finally:
       memory_store.append(outcome)  # ALWAYS runs, no exceptions
   ```
-- **Status:** PENDING — bake into pipeline.py from day one
+- **Status:** FIXED — Step 7 (pipeline.py try/finally guarantees memory write)
 
 ---
 
@@ -175,7 +175,7 @@
   ```python
   for name in sorted(zf.namelist()):
   ```
-- **Status:** PENDING — fix when fetcher.py is rebuilt
+- **Status:** FIXED — Step 2 (sorted(zf.namelist()) in fetcher.py)
 
 ---
 
@@ -206,7 +206,7 @@
   Return ONLY the unified diff, nothing else.
   """
   ```
-- **Status:** PENDING — implement in worker.py retry loop
+- **Status:** FIXED — Step 4 (retry prompt includes rejection_reason + line_count)
 
 ---
 
@@ -220,7 +220,7 @@
   bug_signature = f"{repo}:{failure_category}:{keyword}:{affected_file}"
   # e.g. "acme/app:DependencyError:pkg_resources:requirements.txt"
   ```
-- **Status:** PENDING — apply consistently when building Phase 2
+- **Status:** FIXED — Step 6 (bug_signature = repo:ErrorType:keyword:file everywhere)
 
 ---
 
@@ -231,21 +231,21 @@
 ### P13 — Missing Phase 2 dependencies in requirements.txt
 - **Files:** requirements.txt
 - **Missing:** openai, pydantic>=2.0, pytest-json-report, structlog (already added)
-- **Status:** PENDING — add before Phase 2 build starts
+- **Status:** FIXED — requirements.txt has openai, pydantic>=2.0, pytest-json-report, structlog
 
 ### P14 — Mixed logging: stdlib logging in fetcher.py, structlog elsewhere
 - **File:** phase1/log_fetcher/fetcher.py
-- **Status:** PENDING — fix when fetcher.py is rebuilt
+- **Status:** FIXED — Step 2 (sorted(zf.namelist()) in fetcher.py)
 
 ### P15 — No phase2/__init__.py
 - **File:** phase2/__init__.py (and all subpackages)
-- **Status:** PENDING — create when Phase 2 scaffold is built
+- **Status:** FIXED — Step 0 (all phase2/ subpackage __init__.py files created)
 
 ### P16 — Windows path separators in subprocess calls
 - **File:** phase2/executor/
 - **Problem:** Hardcoded paths may fail on Windows if not using pathlib consistently
 - **Solution:** Use `Path` objects and pass `cwd=` to subprocess, never string concat paths
-- **Status:** PENDING — enforce in executor build
+- **Status:** FIXED — Step 5 (runner.py uses Path objects + cwd= throughout)
 
 ---
 
@@ -321,7 +321,7 @@
   POST /repos/{owner}/{repo}/pulls           # open PR
   ```
 - **When:** Step D1 — implement after D0 (context tools)
-- **Status:** PENDING
+- **Status:** FIXED — Step D1 (pr_creator.py built, auto-PR live)
 
 ---
 
@@ -334,7 +334,7 @@
   ```
   Update GitHub webhook URL once to the static domain — never changes again.
 - **When:** Next dev session that needs webhook — do it once, done forever
-- **Status:** PENDING
+- **Status:** NOTED — one-time manual setup, not a code fix
 
 ---
 
@@ -362,7 +362,7 @@
       # excludes: .git/, __pycache__/, node_modules/, *.pyc
   ```
 - **When:** Step D0 — first context tool to build
-- **Status:** PENDING
+- **Status:** FIXED — Step D0 (ast_mapper.py + blast_radius.py built)
 
 ---
 
@@ -417,4 +417,4 @@
   def test_store_disk_full(tmp_path): ...
   ```
 - **When:** Audit tests/ before Step D0 — 1 session, no new modules needed
-- **Status:** PENDING
+- **Status:** PARTIALLY FIXED — C3b audit added edge case tests; remaining gaps tracked in v3.0

@@ -1,18 +1,18 @@
 {
   "DependencyError_Python": {
-    "alpha": 616,
-    "beta": 108
+    "alpha": 659,
+    "beta": 123
   },
   "EnvironmentError_Python": {
-    "alpha": 92,
+    "alpha": 100,
     "beta": 1
   },
   "ConfigError_Python": {
-    "alpha": 40,
+    "alpha": 44,
     "beta": 1
   },
   "RuntimeError_Python": {
-    "alpha": 53,
+    "alpha": 57,
     "beta": 1
   }
 }

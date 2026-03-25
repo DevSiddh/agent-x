@@ -7,9 +7,10 @@ designs, builds, tests, fixes its own errors, learns from every run.
 CI/CD repair is the proving ground — not the destination.
 Full vision → @docs/vision.md
 
-## Current Mission (v2.1)
-Prove the repair loop works on real GitHub repos before building
-the planning + task loop on top of it.
+## Current Mission (v3.0 — IN PROGRESS)
+Agent-Y (brain) plans goals into Tasks. Agent-X (hands) executes them.
+Repair loop proven (v2.3 done, 493 tests). Now building creation mode.
+Next: Step X-C0 — Orchestrator + StateManager + write_file()
 
 ## Architecture Flow (strict order)
 GitHub Actions fails → Observer captures log (last 50 lines)
@@ -54,24 +55,32 @@ bug_signature format: repo:ErrorType:keyword:affected_file
   "decision", "success_count", "fail_count", "error"
 }
 
-## Folder Structure — v1 COMPLETE + CLEAN (2026-03-20 | 165 tests)
+## Folder Structure — v2.3 COMPLETE + v3.0 IN PROGRESS (2026-03-25 | 493 tests)
 agent-x/
-├── phase1/webhook/         server.py, hmac_validator.py       [DONE — 15 tests]
-├── phase1/log_fetcher/     fetcher.py, cleaner.py             [DONE — 13 tests]
+├── phase1/webhook/         server.py, hmac_validator.py       [DONE]
+├── phase1/log_fetcher/     fetcher.py, cleaner.py             [DONE]
 ├── phase1/dataset/         synthetic.jsonl, schema.py         [DONE]
-├── phase2/classifier/      regex_pass.py, safety_gate.py      [DONE — 33 tests]
-├── phase2/patch_gen/       worker.py, sanitiser.py            [DONE — 19 tests]
-├── phase2/executor/        runner.py, regression.py           [DONE — 18 tests]
-├── phase2/memory/          store.py                           [DONE — 17 tests]
-├── phase2/logging_config.py                                   [DONE — Step 8]
-├── phase2/pipeline.py                                         [DONE — 7 tests]
-├── fixtures/               syn_001..005/ (real git repos)     [DONE — 26 tests]
-├── spike/                  run_spike.py (throwaway validator)  [DONE]
-├── memory/memory.jsonl     5 entries from live pipeline run
-├── tests/
-├── docs/roadmap.md         ← full build plan
-├── docs/problems_and_solutions.md  ← all bugs + fixes
+├── phase2/classifier/      regex_pass.py, safety_gate.py, semantic_fallback.py [DONE]
+├── phase2/patch_gen/       worker.py, sanitiser.py            [DONE]
+├── phase2/executor/        runner.py, regression.py, security_gate.py [DONE]
+├── phase2/memory/          store.py, similarity.py, failure_classifier.py [DONE]
+├── phase2/tools/           ast_mapper.py, blast_radius.py, pr_creator.py [DONE — D0/D1]
+├── phase2/strategy/        thompson.py                        [DONE]
+├── phase2/gateway.py       zero-cost direct fixes             [DONE — C2]
+├── phase2/pipeline.py      full repair pipeline               [DONE — 493 tests]
+├── phase3/                 webhook_worker, runner, log_cleaner_real [DONE — B0-B3]
+├── agent_y/                reasoner.py, schemas.py            [DONE — Y-C0]
+├── dashboard/              app.py, data.py                    [DONE — E0]
+├── fixtures/               syn_001..005/ (real git repos)     [DONE]
+├── memory/                 memory.jsonl, thompson_state.json  [LIVE]
+├── tests/                  23 test files                      [493 passing]
+├── docs/                   progress.md, prompts/, roadmap.md
 └── .env.example
+
+## v3.0 New Modules (PENDING — next steps)
+├── phase3/state_manager.py     load/save SharedState atomically  [Step X-C0]
+├── phase3/orchestrator.py      dumb loop: plan → task → execute  [Step X-C0]
+└── phase2/skills/vault.py      Bayesian skill vault              [Step Y-C1]
 
 ## Key Reference Docs
 problems + solutions → docs/problems_and_solutions.md
