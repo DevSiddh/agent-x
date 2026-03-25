@@ -101,6 +101,12 @@ v3.2 → Interface layer (locked 2026-03-25):
   - GitHub webhook: parse /approve and /fix comments → trigger Orchestrator
   Files: phase3/brief_watcher.py, dashboard/app.py (+10L), telegram bot (+20L),
          pr_creator.py (+15L), webhook/server.py (+20L) — ~95 lines total, one session
+  Brief intake folder: /projects/new/
+    your-project.yaml   ← required
+    *.pdf               ← optional → pdf_extractor.py (already built)
+    *.csv / *.json      ← optional → schema extracted → SharedState.data_samples
+    *.py / *.js         ← optional → existing code for "improve this" tasks
+  Images: NOT needed until Agent-UI (v4.x) — no visual judgment before then
 v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out
 
