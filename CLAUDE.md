@@ -93,6 +93,14 @@ v3.0 Hard Rules (locked 2026-03-25):
 - write_file for new files, file_edit for modifications — never write_file on existing files
 - ArtifactEntry checksum checked before each task — halt if file changed outside pipeline
 v3.1 → Project memory: goal + architecture + progress state
+v3.2 → Interface layer (locked 2026-03-25):
+  - File watcher: drop brief.yaml → /projects/new/ → watchdog triggers Agent-XYZ
+  - Streamlit: add current_task_id/total_tasks progress bar (SharedState read)
+  - Telegram: inline approve/reject buttons after PR opened
+  - PR comments: Agent-XYZ narrates each completed task on the PR
+  - GitHub webhook: parse /approve and /fix comments → trigger Orchestrator
+  Files: phase3/brief_watcher.py, dashboard/app.py (+10L), telegram bot (+20L),
+         pr_creator.py (+15L), webhook/server.py (+20L) — ~95 lines total, one session
 v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out
 
