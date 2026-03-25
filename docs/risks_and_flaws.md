@@ -178,6 +178,28 @@
 
 ---
 
+## v3.0 GAPS (Gemini audit — 2026-03-26)
+
+---
+
+### G1 — Dependency Deadlock (no INSTALL_DEPS action)
+- **What happens:** Agent-Y plans "import redis" → Agent-X writes it → pytest fails ModuleNotFoundError → Agent-Y replans → Agent-X rewrites code to avoid redis → architecture ruined
+- **Root cause:** TaskAction enum has no mechanism to install packages
+- **Fix:** Enforce rule: Agent-Y must add a `requirements.txt` update task BEFORE any task that imports a new library. Orchestrator rejects any task importing an uninstalled package.
+- **Status:** PENDING — fix before integration test
+
+### G2 — state.json RAM Bomb
+- **What happens:** 40-task project + full error tracebacks logged → state.json grows to 5MB+ → atomic write every loop iteration → CPU spikes + GC pauses on 2GB VPS
+- **Fix:** Rolling window in StateManager — keep last 5 error entries, archive rest to `.agent/errors.log`
+- **Status:** PENDING — fix in StateManager before v3.2
+
+### G3 — Best-of-N Test Pollution
+- **What happens:** Variant A writes corrupted SQLite row or rogue `/tmp/` file → rollback resets code but not environment → Variant B fails even if code is perfect
+- **Fix:** Enforce `tmp_path` fixtures in all AcceptanceCriteria test cases. Add to AcceptanceCriteria spec in v30_creation_steps.md.
+- **Status:** PENDING — add to spec before integration test
+
+---
+
 ## INFRASTRUCTURE FLAWS
 
 ---

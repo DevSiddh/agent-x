@@ -1,128 +1,83 @@
 # Agent-X | Progress Tracker
-# AUTO-UPDATED by Claude after every completed step + passing tests
-# Last updated: 2026-03-25 (Y-C1 DONE — SkillVault + Best-of-N + Retrospective. 540 tests. v3.0 COMPLETE.)
-# Rule: Claude MUST update this file after every step before moving to next
+# Last updated: 2026-03-25
+# Full build history (v1–v2.3): docs/archive/progress_v1_v2.md
 
 ---
 
-## North Star (never lose this)
-Autonomous software engineer. Agent-Y (brain) + Agent-X (hands) in a feedback loop.
-User gives idea → system thinks, designs, builds, tests, fixes, learns.
-CI/CD repair is the proving ground — not the destination.
+## North Star
+Autonomous software engineer. Agent-Y (brain) + Agent-X (hands).
 Full vision → @docs/vision.md
 
-## v1 Goal
-pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
+---
+
+## Current Status: v3.0 COMPLETE — 540 tests passing
+memory.jsonl: 406+ entries | thompson_state.json: active | skill_vault.jsonl: LIVE
 
 ---
 
-## Overall Status: v3.1 DONE — 2026-03-25 — Y-C1 DONE. v3.0 COMPLETE.
+## Build History (summary)
+
+| Version | Steps | Status | Tests | Date |
+|---------|-------|--------|-------|------|
+| v1 Phase 1 + Steps 0–8 | Foundation + pipeline | DONE | 165 | 2026-03-20 |
+| v1.1–v1.4 Steps 9–14 | RAG, patch quality, Thompson, hooks, rules | DONE | 206 | 2026-03-20 |
+| v2.0 Steps A0–A3 | Agent-Y reasoning layer | DONE | 233 | 2026-03-20 |
+| v2.1 Steps B0–B3 | Real GitHub webhook integration | DONE | 304 | 2026-03-21 |
+| v2.1.5 Steps C0–C2 | Memory engine + hardening + gateway | DONE | 311 | 2026-03-22 |
+| v2.1.6 C3+AUDIT+C3b | Multi-language + 13 audit fixes + embedding classifier | DONE | 363 | 2026-03-22 |
+| v2.2 Steps D0–D1 | Context tools + auto-PR | DONE | 480 | 2026-03-24 |
+| v2.3 Steps E0–E1 | Dashboard + failure learning | DONE | 491 | 2026-03-24 |
+
+Full step details → @docs/archive/progress_v1_v2.md
 
 ---
 
-## DONE — Completed Steps (compressed)
-
-| Step | Description | Tests | Date |
-|------|-------------|-------|------|
-| Phase1: Webhook | hmac_validator.py + server.py + SQLite queue | 15t | 2026-03-20 |
-| Phase1: Log Fetcher | cleaner.py + fetcher.py — P4 P9 P14 fixed | 13t | 2026-03-20 |
-| Phase1: Dataset | synthetic.jsonl + schema.py — 5 cases | PASS | 2026-03-20 |
-| Step 0: Scaffolding | phase2 packages + 5 fixture repos (syn_001–005) | 26t | 2026-03-20 |
-| Step 1: Spike | spike/run_spike.py — DeepSeek loop confirmed end-to-end | PASS | 2026-03-20 |
-| Step 2: Fetcher rebuild | fetcher.py — lazy token, sorted ZIP, structlog | 13t | 2026-03-20 |
-| Step 3: Classifier | regex_pass.py + safety_gate.py — 5/5 correct, conf=0.99 | 33t | 2026-03-20 |
-| Step 4: PatchGen | worker.py + sanitiser.py — DeepSeek, retry, strip fences | 19t | 2026-03-20 |
-| Step 5: Executor | runner.py + regression.py — git apply, rollback, pytest-json-report | 18t | 2026-03-20 |
-| Step 6: Memory Store | store.py — append never raises, dedup, get_similar | 17t | 2026-03-20 |
-| Step 7: Pipeline v1 | pipeline.py — all stages wired, try/finally, 5/5 in memory | 7t | 2026-03-20 |
-| Step 8: Cleanup | logging_config.py — structlog JSON, all deps pinned | 165t | 2026-03-20 |
-| Step 9: Context Builder | context_builder.py — build_context(), 3-section prompt, RAG | 15t | 2026-03-20 |
-| Step 10: Patch Quality | +++ header check, path check, --recount → 5/5 accepted (was 2/5) | 26t | 2026-03-20 |
-| Step 11: Thompson | strategy/thompson.py — Beta(α,β), save/load, sample+update in pipeline | 19t | 2026-03-20 |
-| Step 12: Hooks | .claude/settings.json — PreToolUse block, PostToolUse black, Notification | 206t | 2026-03-20 |
-| Step 13: Rules | .claude/rules/ — python.md + tests.md + docs.md, on-demand load | 206t | 2026-03-20 |
-| Step 14: CLAUDE.md | Litmus audit 153→73 lines, @imports, ENFORCEMENT+SELF-UPDATE rules | 206t | 2026-03-20 |
-| A0: Agent-Y Spike | spike/run_spike_y.py — 3/3 categories clean JSON, correct files | PASS | 2026-03-20 |
-| A1: Reasoner | agent_y/reasoner.py — ReasonerOutput, validate_strategy, _extract_json | 27t | 2026-03-20 |
-| A2: Reasoner wired | pipeline step 5.5 — ContextBuilder → Reasoner → DeepSeekWorker | 206t | 2026-03-20 |
-| A3: Autoresearch gate | 20/20 accepted with Agent-Y — v1.1 UNLOCKED | — | 2026-03-20 |
-| B0–B3: v2.1 Webhook | phase3/ — log_cleaner_real, webhook_worker, runner, integration | 283t | 2026-03-21 |
-| Live Testing | 4 categories confirmed on real GitHub CI — 101+ accepted | 304t | 2026-03-22 |
-| C0: Memory Engine | similarity.py — TF-IDF hybrid ranking, memory reuse bypass (step 4.5) | 294t | 2026-03-21 |
-| C1: Pipeline Hardening | run_tests_stable(), Bandit gate, Radon gate, structural escalation | 304t | 2026-03-21 |
-| C2: Gateway Stage | gateway.py — module_not_found rule, zero LLM cost, step 4.3 | 311t | 2026-03-22 |
-| C3: Multi-Lang Executor | get_runner() — .py→pytest .js→jest .ts→vitest .php→phpunit .java→mvn | 323t | 2026-03-22 |
-| AUDIT: 13 fixes | AssertionError weight, structural penalty, Syntax Reflex, Amnesia Protocol | 323t | 2026-03-22 |
-| C3b: Multi-Lang Classifier | JS/PHP/Java/SQL patterns + multi-format log cleaner | PASS | 2026-03-23 |
-| RAG: Triple Hybrid | similarity.py — 0.30 TF-IDF + 0.45 Jina + 0.25 Thompson, find_for_rag() | 350t | 2026-03-22 |
-| CLS: Embedding Fallback | semantic_fallback.py — classify_with_fallback(), floor=0.55 | 363t | 2026-03-22 |
-| P23: GitHub File Fetch | tools/github_file.py — strip runner path, GitHub Contents API fallback | 378t | 2026-03-22 |
-| E1: Failure Learning | failure_classifier.py — rejection_reason field, 6 categories, CLI report | 383t | 2026-03-23 |
-| D0: Context Tools | ast_mapper, blast_radius, web_reader, github_search, pdf_extractor wired | 441t | 2026-03-24 |
-| E0: Dashboard | dashboard/data.py + app.py — 5 sections, Streamlit, 23 tests | 464t | 2026-03-24 |
-| D1: Auto-PR | pr_creator.py — Git DB API, Draft PRs, structural issues, diagnosis field | 480t | 2026-03-24 |
-| Y-C0: Agent-Y Creation Mode | schemas.py (6 models) + plan_goal() + replan() + 13 new tests | 493t | 2026-03-25 |
-
----
-
-## PENDING — Active Work
-
-### v2.1.6 — Multi-Language Full Stack
+## Active: v3.0 Creation Mode
 
 | Step | Description | Status |
 |------|-------------|--------|
-| Step C4 | Playwright visual validation — gated by .css/.tsx/.jsx/.html | PENDING |
+| Step Y-C0 | Agent-Y creation: schemas.py (6 models) + plan_goal() + replan() | DONE — 2026-03-25 |
+| Step X-C0 | Agent-X task mode: write_file() + StateManager + Orchestrator loop | DONE — 2026-03-26 |
+| Step Y-C1 | Skill Vault + Best-of-N + retrospective.py | DONE — 2026-03-26 |
 
-Done condition: Visual regressions caught by Playwright before accepting frontend fixes.
-
----
-
-### v2.3 — Analytics Layer
-
-| Step | Description | Cost | Status |
-|------|-------------|------|--------|
-| Step E2 | Cross-repo pattern detection — auto-generate gateway rule candidates | $0 | PENDING (gate: 3+ repos) |
-
-Done condition: Cross-repo patterns auto-detected for gateway promotion.
+Prompt → @docs/prompts/v30_creation_steps.md
 
 ---
 
-### RAG Upgrades
+## Pending (data-gated)
 
-| Step | Description | Status |
-|------|-------------|--------|
-| Step RAG-NEG | Negative RAG / Autopsy Protocol | PENDING (gate: 10+ test_failure rejections) |
-
----
-
-### Agent-Y Upgrades
-
-| Step | Description | Status |
-|------|-------------|--------|
-| Step A4 | Prompt Loader + Local Model (Ollama + Qwen2.5-7B) | PENDING (trigger: sensitive code or bill >$30/mo) |
+| Step | Description | Gate |
+|------|-------------|------|
+| Step C4 | Playwright visual validation | Blocked — build after v3.0 |
+| Step E2 | Cross-repo pattern detection | Gate: 3+ repos |
+| Step RAG-NEG | Negative RAG / Autopsy Protocol | Gate: 10+ test_failure rejections |
+| Step A4 | Prompt loader + local model | Gate: >$30/mo API bill |
 
 ---
 
-## Bugs Still Open
-P2 P3 P4 P5 P6 P7 P8 P9 P11 P12 P13 P14 P15 P16 P20–P26
-See docs/problems_and_solutions.md for full detail.
+## v3.0 Architecture — LOCKED (2026-03-25)
+
+Schemas: SharedState, Task(TaskAction enum), AcceptanceCriteria(min 3 cases), ArtifactEntry, ReplanAnalysis, ReplanResponse
+Full spec → @docs/prompts/v30_creation_steps.md
+Hard rules → CLAUDE.md → "v3.0 Hard Rules" section
 
 ---
 
-## Test Count History (final per phase)
-| Phase complete | Tests |
-|----------------|-------|
-| v1 Foundation (Step 8) | 165t |
-| v1.1–v1.4 (Steps 9–14) | 206t |
-| Agent-Y v1 (A0–A3) | 206t |
-| v2.1 Webhook (B0–B3) | 283t |
-| v2.1.5 (C0–C2) | 311t |
-| v2.1.6 partial (C3+AUDIT) | 323t |
-| RAG+CLS+P23 | 378t |
-| E1 | 383t |
-| D0 | 441t |
-| E0 | 464t |
-| D1 | 480t |
-| Y-C0 | 493t |
-| X-C0 | 517t |
-| Y-C1 (current) | 540t |
+## Hooks + Skills Architecture — LOCKED (2026-03-25)
+
+| Decision | Rule |
+|----------|------|
+| Hook execution | Direct import; subprocess only for security_scan |
+| Skill injection | Context into Agent-Y prompt — never writes to plan[] directly |
+| Skill loading | Keyword match on goal field against skills/manifest.yaml |
+| Hook failure | hard hooks (security/type) → FAIL task; soft hooks (format/notify) → WARN only |
+| Adaptive skills | Thompson on skill templates → skill_state.json; gate: 20 runs/skill |
+
+Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
+
+---
+
+## Last Test Run
+```
+540 tests passing — 2026-03-26 (v3.0 COMPLETE)
+```

@@ -3,9 +3,17 @@
 
 ---
 
-## ⚡ v3.0 COMPLETE — NEXT: v3.2 Interface Layer
-# Say "step v3.2" → read docs/prompts/ → execute → update progress.md → STOP.
-# Do NOT look at GATED section. Do NOT start any other step.
+## ⚡ NEXT STEP: v3.2 Interface Layer
+# DO THIS AND NOTHING ELSE.
+# Rewire Telegram + Streamlit → Orchestrator. Add brief watcher + Telegram approval gate.
+# v3.0 COMPLETE — Y-C0 + X-C0 + Y-C1 all DONE. 540 tests passing.
+
+## LIMITATIONS / OPEN QUESTIONS
+# docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
+# If user asks "any limitations?" or "any bugs?" — READ THAT FILE FIRST.
+# Do NOT re-audit v30_creation_steps.md from scratch.
+# Do NOT add to this list without checking that file first.
+# New finding? Add to v30_open_questions.md. Already there? Say "already logged at Q#".
 
 ---
 
@@ -13,9 +21,9 @@
 
 | Priority | Step | File | Status |
 |----------|------|------|--------|
-| ✅ DONE | step Y-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
-| ✅ DONE | step X-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
-| ✅ DONE | step Y-C1 | v30_creation_steps.md | DONE — 2026-03-25 |
+| 1 — DO NOW | step X-C0 | v30_creation_steps.md | PENDING |
+| 2 | step X-C0 | v30_creation_steps.md | PENDING — after Y-C0 |
+| 3 | step Y-C1 | v30_creation_steps.md | PENDING — after X-C0 |
 
 ---
 
