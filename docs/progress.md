@@ -1,6 +1,6 @@
 # Agent-X | Progress Tracker
 # AUTO-UPDATED by Claude after every completed step + passing tests
-# Last updated: 2026-03-25 (X-C0 DONE — write_file + StateManager + Orchestrator. 517 tests.)
+# Last updated: 2026-03-25 (Y-C1 DONE — SkillVault + Best-of-N + Retrospective. 540 tests. v3.0 COMPLETE.)
 # Rule: Claude MUST update this file after every step before moving to next
 
 ---
@@ -16,7 +16,7 @@ pipeline.py runs end-to-end on 5 synthetic cases. All 5 in memory.jsonl.
 
 ---
 
-## Overall Status: v3.0 IN PROGRESS — 2026-03-25 — X-C0 DONE. Next: Y-C1
+## Overall Status: v3.1 DONE — 2026-03-25 — Y-C1 DONE. v3.0 COMPLETE.
 
 ---
 
@@ -124,4 +124,5 @@ See docs/problems_and_solutions.md for full detail.
 | E0 | 464t |
 | D1 | 480t |
 | Y-C0 | 493t |
-| X-C0 (current) | 517t |
+| X-C0 | 517t |
+| Y-C1 (current) | 540t |

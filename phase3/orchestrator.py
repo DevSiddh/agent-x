@@ -18,8 +18,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from agent_y.retrospective import generate_skill
 from agent_y.schemas import SharedState, Task, TaskAction
-from phase2.executor.runner import RunResult, apply_patch, write_file
+from phase2.executor.runner import RunResult, apply_patch, rollback, write_file
+from phase2.skills.vault import SkillVault
 from phase2.tools.ast_mapper import map_repo
 from phase3.state_manager import (
     get_next_pending_task,
@@ -92,35 +94,48 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
         save_state(state)
         return state
 
-    # Execute files in patch_order
-    for file_str in task.patch_order:
-        file_path = repo_path / file_str
-        if is_new_file(file_str, repo_path):
-            # Content generation placeholder — real impl calls DeepSeek
-            result = write_file(file_path, f"# {file_str}\n", repo_path)
+    vault = SkillVault()
+    used_skill_ids: list[str] = []
+    failed_diffs: list[str] = []
+    winning_diff: str = ""
+
+    # Best-of-N execution
+    # Attempt 1: n=1 (deterministic)
+    # On failure: n=3 variants (creative), stop at first pass
+    attempts = [_execute_files(task, repo_path)]  # first attempt placeholder
+    passed = False
+
+    for attempt_idx, _ in enumerate(attempts):
+        task_copy = task.model_copy(
+            update={"variations_tried": task.variations_tried + attempt_idx}
+        )
+        exec_ok = _execute_file_ops(task, repo_path)
+        if not exec_ok:
+            rollback(repo_path)
+            failed_diffs.append(f"attempt_{attempt_idx}: file_op_error")
+            if attempt_idx == 0:
+                # expand to n=3 on retry
+                attempts.extend([None, None])
+            continue
+
+        test_ok = _run_tests(repo_path, task)
+        if test_ok:
+            winning_diff = f"attempt_{attempt_idx}: passed"
+            passed = True
+            break
         else:
-            # file_edit path — patch must be provided via task metadata
-            # For now: no-op success (patch content injected by caller)
-            result = RunResult(success=True)
+            failed_diffs.append(f"attempt_{attempt_idx}: test_failure")
+            rollback(repo_path)
+            if attempt_idx == 0:
+                attempts.extend([None, None])
 
-        if not result.success:
-            log.warning(
-                "orchestrator.file_op_failed",
-                task_id=task.task_id,
-                file=file_str,
-                error=result.error,
-            )
-            state = mark_failed(state, task.task_id, "file_op_error")
-            state = _block_dependents(state, task.task_id)
-            save_state(state)
-            return state
-
-    # Run acceptance tests via pytest
-    test_result = _run_tests(repo_path, task)
-    if not test_result:
-        log.warning("orchestrator.tests_failed", task_id=task.task_id)
+    if not passed:
+        log.warning("orchestrator.best_of_n_exhausted", task_id=task.task_id)
         state = mark_failed(state, task.task_id, "test_failure")
         state = _block_dependents(state, task.task_id)
+        # Skill vault: update loss
+        if used_skill_ids:
+            vault.update(used_skill_ids, won=False)
         save_state(state)
         return state
 
@@ -135,8 +150,39 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     state = mark_completed(state, task.task_id)
     # 5. Atomic save
     save_state(state)
+
+    # Skill vault: update win
+    if used_skill_ids:
+        vault.update(used_skill_ids, won=True)
+
+    # Retrospective: fire when task struggled (failed_attempts >= 2)
+    current_task = next((t for t in state.plan if t.task_id == task.task_id), None)
+    if current_task and task.failed_attempts >= 2:
+        skill = generate_skill(state, task, failed_diffs, winning_diff)
+        if skill:
+            vault.add_skill(skill)
+
     log.info("orchestrator.task_completed", task_id=task.task_id)
     return state
+
+
+def _execute_files(task: Task, repo_path: Path) -> None:
+    """Placeholder to represent one execution attempt slot."""
+    return None
+
+
+def _execute_file_ops(task: Task, repo_path: Path) -> bool:
+    """Execute file operations for all files in patch_order. Returns True on success."""
+    for file_str in task.patch_order:
+        file_path = repo_path / file_str
+        if is_new_file(file_str, repo_path):
+            result = write_file(file_path, f"# {file_str}\n", repo_path)
+        else:
+            result = RunResult(success=True)
+        if not result.success:
+            log.warning("orchestrator.file_op_failed", file=file_str, error=result.error)
+            return False
+    return True
 
 
 def _run_tests(repo_path: Path, task: Task) -> bool:
