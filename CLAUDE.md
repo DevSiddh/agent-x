@@ -106,6 +106,7 @@ v3.2 → Interface layer (locked 2026-03-25):
     *.pdf               ← optional → pdf_extractor.py (already built)
     *.csv / *.json      ← optional → schema extracted → SharedState.data_samples
     *.py / *.js         ← optional → existing code for "improve this" tasks
+    *.md                ← optional → research notes, Gemini/ChatGPT outputs, specs, arch docs
   Images: NOT needed until Agent-UI (v4.x) — no visual judgment before then
 v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out
