@@ -18,6 +18,7 @@
 @docs/prompts/v216_steps.md      ← Steps C3 C3b C4 (v2.1.6 multi-language + visual)
 @docs/prompts/v22_steps.md       ← Steps D0 D1 (v2.2 context tools + auto-PR)
 @docs/prompts/v23_analytics.md   ← Steps E0 E1 E2 (v2.3 analytics — $0 cost)
+@docs/prompts/v30_creation_steps.md  ← Steps Y-C0 X-C0 (v3.0 creation mode)
 
 ---
 
@@ -58,7 +59,7 @@
 | step D1     | v22_steps.md                | DONE     |
 | step E0     | v23_analytics.md            | DONE     |
 | step E2     | v23_analytics.md            | PENDING (gate: 3+ repos) |
-| step Y-C0   | v30_creation_steps.md (TBD) | PENDING  |
-| step X-C0   | v30_creation_steps.md (TBD) | PENDING  |
+| step Y-C0   | v30_creation_steps.md       | PENDING  |
+| step X-C0   | v30_creation_steps.md       | PENDING  |
 | step A4     | v1_steps_9_14.md            | TRIGGER  |
 | audit       | audit.md                    | ALWAYS   |

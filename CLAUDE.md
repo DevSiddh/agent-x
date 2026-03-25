@@ -76,6 +76,14 @@ v2.3 → Multi-repo support                       [after v2.2]
 v3.0 → Plan + Task queue: Y designs, X executes, feedback loop
 v3.0.1 → Agent-Y creation mode: new system prompt + "build" action (Step Y-C0)
 v3.0.2 → Agent-X task mode: write_file() capability, not just git apply (Step X-C0)
+v3.0 Hard Rules (locked 2026-03-25):
+- Orchestrator atomic write: state_tmp.json → rename, never direct json.dump to state.json
+- Agent-Y called ONLY when: plan empty OR failed_task_streak == 2
+- AcceptanceCriteria: min 3 I/O cases (Pydantic enforced) — Happy Path + Edge Case + Error Case
+- Agent-X writes test first (parametrize), implementation second
+- Replan: inject failed diff + Thompson history — never blind replan
+- Replan: surgical sub-tasking only (4 → 4a+4b), never rewrite full plan[]
+- global_interfaces: ast_mapper on files_to_touch only, updated after every task
 v3.1 → Project memory: goal + architecture + progress state
 v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out

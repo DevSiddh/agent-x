@@ -960,3 +960,40 @@ Autoresearch results:
 - Check 4: 20/20 — 100% acceptance rate maintained post-Agent-Y (baseline was 5/5)
 
 v1.1 unlocked: local model (Ollama + Qwen2.5-7B) for Agent-Y reasoning
+
+---
+
+## v3.0 Architecture — LOCKED (2026-03-25, Gemini staff engineer review)
+
+### Orchestrator Post-Task Flow (exact order)
+1. ast_mapper(files_to_touch only) — deterministic, no LLM
+2. Merge into global_interfaces in memory
+3. task.status = "completed", failed_task_streak = 0
+4. Atomic write: state_tmp.json → rename state.json
+5. Find next task where status == "pending" → Agent-X
+6. Agent-Y called ONLY on: empty plan OR failed_task_streak == 2
+
+### Schemas Locked
+- Task: task_id, description, files_to_touch (max 3), patch_order, acceptance_criteria, depends_on, status, failed_attempts
+- AcceptanceCriteria: target_function + cases (min 3 I/O pairs)
+- SharedState: project_id, goal, plan[], current_task_id, failed_task_streak, global_interfaces{}, artifacts[]
+- ReplanAnalysis: root_cause_of_failure + flaw_in_previous_approach + explicit_pivot_strategy
+- ReplanResponse: analysis (ReplanAnalysis) + new_sub_tasks[] (surgical, never full rewrite)
+
+### Anti-Cheat (Reward Hacking prevention)
+- 3+ I/O cases per task (Happy Path + Edge Case + Error Case) enforced by Pydantic min_length=3
+- Agent-X writes test FIRST (pytest.mark.parametrize), then implementation
+- 15-line limit applies to test files — parametrize fits 3 cases in 8-10 lines
+
+### Replan Context Injection (exact)
+1. Failed task description
+2. failure_type
+3. Error output (20 lines max)
+4. files_to_touch
+5. Failed acceptance cases
+6. Actual diff Agent-X wrote (critical — prevents blind replan)
+7. Thompson history note for this failure_type
+
+### Tree-sitter Migration (v3.1, not v3.0)
+Router pattern: .py → ast_mapper (stdlib ast, exists), .js/.ts/.php/.java → treesitter_mapper (new)
+Never modify ast_mapper.py — add router alongside it
