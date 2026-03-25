@@ -98,6 +98,7 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     used_skill_ids: list[str] = []
     failed_diffs: list[str] = []
     winning_diff: str = ""
+    variations_tried: int = 0
 
     # Best-of-N execution
     # Attempt 1: n=1 (deterministic)
@@ -106,15 +107,12 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     passed = False
 
     for attempt_idx, _ in enumerate(attempts):
-        task_copy = task.model_copy(
-            update={"variations_tried": task.variations_tried + attempt_idx}
-        )
+        variations_tried += 1
         exec_ok = _execute_file_ops(task, repo_path)
         if not exec_ok:
             rollback(repo_path)
             failed_diffs.append(f"attempt_{attempt_idx}: file_op_error")
             if attempt_idx == 0:
-                # expand to n=3 on retry
                 attempts.extend([None, None])
             continue
 
@@ -138,6 +136,14 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
             vault.update(used_skill_ids, won=False)
         save_state(state)
         return state
+
+    # Write variations_tried back to task in state
+    updated_plan = [
+        t.model_copy(update={"variations_tried": variations_tried})
+        if t.task_id == task.task_id else t
+        for t in state.plan
+    ]
+    state = state.model_copy(update={"plan": updated_plan})
 
     # POST-TASK SUCCESS FLOW (strict order)
     # 1. ast_mapper on files_to_touch only

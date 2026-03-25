@@ -185,9 +185,12 @@ def run(case_id: str) -> MemoryEntry:
 
     Stages (strict order per CLAUDE.md):
     Observer → LogParser → RegexClassifier → PreSafetyGate
+    → Gateway (zero-cost direct fixes) → MemoryReuse
     → ThompsonSampler.sample() → ContextBuilder → Agent-Y Reasoner
-    → DeepSeekWorker → PostSafetyValidation → Executor
-    → RegressionCheck → DecisionEngine → ThompsonSampler.update() → MemoryStore
+    → NegativeCheck → BaselineTests → DeepSeekWorker
+    → Bandit → Radon → SecurityGate → Executor
+    → SyntaxReflex → ShadowTypeCheck → RegressionCheck
+    → DecisionEngine → ThompsonSampler.update() → AutoPR → MemoryStore
 
     try/finally guarantees MemoryStore write on every run. (P8)
     """

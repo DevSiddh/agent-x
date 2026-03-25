@@ -11,7 +11,11 @@ import sys
 from pathlib import Path
 
 import structlog
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None  # type: ignore
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
@@ -51,6 +55,10 @@ def generate_skill(
         api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if not api_key:
             log.warning("retrospective.skip", reason="no_api_key")
+            return None
+
+        if OpenAI is None:
+            log.warning("retrospective.skip", reason="openai_not_installed")
             return None
 
         client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
