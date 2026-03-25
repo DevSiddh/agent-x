@@ -10,7 +10,7 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v3.0 NEXT — 491 tests passing
+## Current Status: v3.0 IN PROGRESS — 491 tests passing
 memory.jsonl: 406+ entries | thompson_state.json: active | memory reuse: LIVE
 
 ---
@@ -36,8 +36,8 @@ Full step details → @docs/archive/progress_v1_v2.md
 
 | Step | Description | Status |
 |------|-------------|--------|
-| Step Y-C0 | Agent-Y creation: schemas.py (6 models) + plan_goal() + replan() | PENDING |
-| Step X-C0 | Agent-X task mode: write_file() + StateManager + Orchestrator loop | PENDING — after Y-C0 |
+| Step Y-C0 | Agent-Y creation: schemas.py (6 models) + plan_goal() + replan() | DONE — 2026-03-25 |
+| Step X-C0 | Agent-X task mode: write_file() + StateManager + Orchestrator loop | PENDING |
 | Step Y-C1 | Adaptive skill templates: Thompson on skills/manifest.yaml | PENDING — after Y-C0 |
 
 Prompt → @docs/prompts/v30_creation_steps.md

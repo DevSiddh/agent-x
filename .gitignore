@@ -60,6 +60,5 @@ Thumbs.db
 logs/
 
 # Claude internal tools — never push to GitHub
-docs/
 phase3/processed_runs.db
 python

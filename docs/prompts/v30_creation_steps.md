@@ -55,10 +55,15 @@ BUILD THIS STEP:
        files_to_touch: list[str] = Field(max_length=3)
        patch_order: list[str] = []
        acceptance_criteria: AcceptanceCriteria
+       hint: str = ""         # optional — Agent-Y uses ONLY for hard constraints AcceptanceCriteria
+                              # cannot express (e.g. "use requests not httpx", "factory pattern required")
+                              # empty 90% of the time — Orchestrator appends to static prompt if set
        depends_on: list[str] = []
        status: Literal["pending", "in_progress", "completed", "failed", "blocked"] = "pending"
        failed_attempts: int = 0
        variations_tried: int = 0  # Best-of-N: how many variants attempted before pass
+
+   # NOTE: hint field must be included in schemas.py — it is part of the locked Task model.
 
    class SharedState(BaseModel):
        project_id: str
@@ -105,8 +110,20 @@ BUILD THIS STEP:
 
    T0 scaffold task:
    - First task is ALWAYS action=SCAFFOLD
-   - Orchestrator runs cookiecutter with a named template
-   - Templates: fastapi-template, cli-template, bot-telegram-template, script-template
+   - Orchestrator calls inline scaffold_project() — no cookiecutter, no external templates
+   - scaffold_project(project_slug, template, repo_path) creates: src/, tests/, __init__.py,
+     conftest.py, pyproject.toml stubs — pure Python, zero external dependency
+   - Template arg is a hint string only ("fastapi" | "cli" | "bot" | "script") — no files to maintain
+   - scaffold_project() also creates .agent/context.md with initial content:
+       # {project_slug} context
+       Goal: {goal from SharedState}
+       Template: {template}
+       Architecture: TBD
+       Key files: TBD
+       Decisions: TBD
+       Known issues: none
+       Last task: T0 — scaffold ({date})
+   - .agent/context.md is committed to GitHub with every code push
    - After scaffold: tests/ folder exists before any write_file
 
    write_file vs file_edit:
@@ -209,8 +226,8 @@ BUILD THIS STEP:
        """
        Write new file content to disk.
        Steps:
-         1. Validate 15-line limit: len(content.splitlines()) <= 15
-            if exceeded → return RunResult(success=False, error="write_file: exceeds 15-line limit")
+         1. Validate 50-line limit: len(content.splitlines()) <= 50
+            if exceeded → return RunResult(success=False, error="write_file: exceeds 50-line limit")
          2. Create parent directories if missing: file_path.parent.mkdir(parents=True, exist_ok=True)
          3. Write content to file_path
          4. git add file_path (subprocess, cwd=repo_path)
@@ -219,8 +236,12 @@ BUILD THIS STEP:
        structlog: executor.write_file.ok / executor.write_file.error
        """
 
-   15-line limit applies to ALL writes including test files.
-   pytest.mark.parametrize fits 3 I/O cases in 8-10 lines — within the limit.
+   DUAL-GATE LINE LIMITS (locked — D11, never mix these two gates):
+   - write_file (new file creation): 50-line limit (task cap — testability gate)
+   - file_edit / apply_patch (existing file): 15-line limit (patch cap — LLM quality gate)
+   Rationale: new file needs no context mapping, 50 lines is safe. Editing existing file
+   risks LLM losing its place beyond 15 lines.
+
    Agent-X writes the TEST FILE first (parametrize), then the implementation file.
    This is enforced by task patch_order in SharedState, not by code.
 
@@ -276,7 +297,12 @@ BUILD THIS STEP:
          3. mark_completed(state, task_id) — in memory only
          4. failed_task_streak = 0 — already done by mark_completed
          5. save_state(state) — atomic write: state_tmp.json → rename state.json
-         6. Return updated state
+         6. update_context_md(repo_path, task) — append completed task to .agent/context.md
+            Format appended: "Last task: {task_id} — {description} ({date})"
+            Also update "Key files:" section with any new files_to_touch
+         7. git commit + push to GitHub — code + .agent/context.md committed together
+            Branch: agent-xyz/{project_slug} (never main)
+         8. Return updated state
 
        AGENT-Y CALL RULE (strict — no exceptions):
          Agent-Y called ONLY when:
@@ -293,15 +319,36 @@ BUILD THIS STEP:
 
          for file_path in task.patch_order:
              if is_new_file(file_path):
+                 # CONTENT GENERATION ("Test is the Prompt" paradigm):
+                 # Orchestrator uses a static system prompt — never constructs it dynamically.
+                 # Agent-Y does NOT write code — it only provides AcceptanceCriteria + optional hint.
+                 # Orchestrator builds the DeepSeek call:
+                 #   system = AGENT_X_STATIC_PROMPT  (hardcoded constant — never changes)
+                 #   user   = f"Task: {task.description}\n"
+                 #            f"File: {file_path}\n"
+                 #            f"Acceptance criteria: {task.acceptance_criteria.model_dump_json()}\n"
+                 #            + (f"Constraint: {task.hint}\n" if task.hint else "")
+                 # Agent-X infers entire implementation from AcceptanceCriteria I/O cases.
+                 # AGENT_X_STATIC_PROMPT constant (locked — do not change per task):
+                 #   "You are Agent-X. Satisfy the Acceptance Criteria exactly.
+                 #    Write tests/test_<name>.py using pytest.mark.parametrize for the provided cases.
+                 #    Then implement src/<name>.py to make them pass.
+                 #    Hard limits: 50 lines per new file, 15 lines per edit.
+                 #    Return raw Python only. No markdown. No explanation."
+                 content = deepseek_call(system=AGENT_X_STATIC_PROMPT, user=user_prompt)
                  result = runner.write_file(content, file_path, repo_path)
              else:
                  result = runner.apply_patch(patch, repo_path)
              if not result.success → mark_failed, save, return
 
          run acceptance tests:
-             for case in task.acceptance_criteria.cases:
-                 result = run_parametrized_test(case, repo_path)
-                 if not result.passed → mark_failed, log which case failed, return
+             # Orchestrator is dumb — pytest is truth. Agent-X wrote the parametrize test
+             # file as part of the task. Orchestrator just fires pytest and trusts exit code.
+             result = runner.run_tests(repo_path,
+                          test_filter=task.acceptance_criteria.target_function)
+             if not result.success → mark_failed(state, task.task_id, "test_failure"), save, return
+             # AcceptanceCriteria cases live in schema for Agent-X to write parametrize tests.
+             # Orchestrator never evaluates them directly — no dynamic eval, no custom runner.
 
          if all cases pass → POST-TASK SUCCESS FLOW (steps 1-6 above)
        """

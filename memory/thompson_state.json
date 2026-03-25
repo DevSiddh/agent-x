@@ -1,26 +1,18 @@
 {
-  "synthetic:DependencyError:missing_setuptools:requirements.txt": {
-    "alpha": 6,
-    "beta": 3
+  "DependencyError_Python": {
+    "alpha": 616,
+    "beta": 108
   },
-  "synthetic:DependencyError:ModuleNotFoundError:requirements.txt": {
-    "alpha": 455,
-    "beta": 41
+  "EnvironmentError_Python": {
+    "alpha": 92,
+    "beta": 1
   },
-  "synthetic:EnvironmentError:no_build_isolation:Makefile": {
+  "ConfigError_Python": {
     "alpha": 40,
     "beta": 1
   },
-  "synthetic:ConfigError:no_such_table:app/database.py": {
-    "alpha": 40,
-    "beta": 1
-  },
-  "synthetic:RuntimeError:pydantic_namespace:app/schemas.py": {
-    "alpha": 40,
-    "beta": 1
-  },
-  "synthetic:EnvironmentError:stale_pycache:scripts/restart.sh": {
-    "alpha": 40,
+  "RuntimeError_Python": {
+    "alpha": 53,
     "beta": 1
   }
 }

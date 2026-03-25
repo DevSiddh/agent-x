@@ -93,10 +93,39 @@ v3.0 Hard Rules (locked 2026-03-25):
 - WORKSPACE_ROOT in .env only — never hardcode paths, never in SharedState
 - project_slug in SharedState — Orchestrator resolves full path locally
 - resolve_safe_path() must wrap EVERY file write — no exceptions
-- T0 = scaffold task always first (cookiecutter)
+- T0 = scaffold task always first — inline scaffold_project(), NOT cookiecutter (no external templates)
 - write_file for new files, file_edit for modifications — never write_file on existing files
 - ArtifactEntry checksum checked before each task — halt if file changed outside pipeline
-v3.1 → Project memory: goal + architecture + progress state
+- LINE LIMITS (dual-gate, D11, never mix): write_file=50 lines (task cap) | file_edit=15 lines (patch cap)
+- ACCEPTANCE TEST: Orchestrator runs pytest (exit code = truth) — never evaluates AcceptanceCriteria cases directly
+- CONTENT GENERATION: static AGENT_X_STATIC_PROMPT constant + AcceptanceCriteria + optional Task.hint
+  Agent-Y never writes code — only AcceptanceCriteria I/O cases + hint: str = "" when needed
+- ROLLBACK (staged files fix): git reset HEAD -- . → git checkout -- . → git clean -fd (NEVER -fdx)
+- PROJECT CONTEXT (pulled forward from v3.1 — bake into X-C0):
+  Every project gets .agent/context.md committed to GitHub alongside code.
+  scaffold_project() creates it. Orchestrator appends after every completed task.
+  Format: Goal | Architecture | Key files | Decisions | Known issues | Last task
+  When resuming any project: read .agent/context.md FIRST before reading any code file.
+  Without this: Agent-XYZ loses all "why" context after 3-10 other projects.
+- MULTI-PROJECT STORAGE: persistent WORKSPACE_ROOT (70GB SSD — no ephemeral cloning needed)
+  Code pushed to GitHub after every completed task. state.json stays on VPS only.
+  registry.jsonl in memory/ = index of all projects (slug, goal, status, created_at)
+- VPS CONSTRAINTS (locked — $16/mo DigitalOcean, 2GB RAM + 1GB swap, 1 vCPU, 70GB SSD):
+  Sequential only — one project builds at a time (Orchestrator enforces this)
+  No local LLM ever — DeepSeek API only (2GB RAM cannot run local models)
+  No parallel pytest — 1 vCPU, run single-threaded always
+  Use uv for all dependency management — global package cache, no per-project venv bloat
+v3.1 → Project memory: goal + architecture + progress state (context.md now in X-C0)
+- PROJECT DELETE (v3.2 — Telegram + CLI):
+  Trigger: "xyz delete {project_slug}" via Telegram or CLI
+  Steps (exact order):
+    1. rm -rf WORKSPACE_ROOT/{project_slug}/   ← frees VPS disk immediately
+    2. Remove entry from registry.jsonl
+    3. Ask user: "Archive or delete GitHub repo?" — default = archive (safe)
+    4. memory.jsonl entries = KEEP (learned fixes are signal, not storage)
+    5. skill_vault.jsonl = KEEP (learned skills are global, not project-specific)
+  Auto-cleanup trigger: WORKSPACE_ROOT hits 80% full → Telegram alert listing
+    oldest inactive projects by last_task date → user picks which to delete
 v3.2 → Interface layer (locked 2026-03-25):
   - File watcher: drop brief.yaml → /projects/new/ → watchdog triggers Agent-XYZ
   - Streamlit: add current_task_id/total_tasks progress bar (SharedState read)
@@ -124,3 +153,7 @@ If a rule must ALWAYS run → make it a hook, not a line here.
 ## SELF-UPDATE RULE
 When Claude makes a mistake: say "update CLAUDE.md so this doesn't happen again"
 Claude writes the rule. It loads next session. No mistake repeats.
+
+## GLOBAL CONFIG (portable — works on any machine with this repo)
+Full global standards, trigger words, templates → @docs/GLOBAL_CLAUDE.md
+Templates (scaffold, brief, blunders, autoresearch, etc.) → docs/

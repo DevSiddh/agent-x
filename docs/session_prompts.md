@@ -3,10 +3,17 @@
 
 ---
 
-## ⚡ NEXT STEP: Y-C0
+## ⚡ NEXT STEP: X-C0
 # DO THIS AND NOTHING ELSE.
-# Say "step Y-C0" → read v30_creation_steps.md → execute → update progress.md → STOP.
+# Say "step X-C0" → read v30_creation_steps.md → execute → update progress.md → STOP.
 # Do NOT look at GATED section. Do NOT start any other step.
+
+## LIMITATIONS / OPEN QUESTIONS
+# docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
+# If user asks "any limitations?" or "any bugs?" — READ THAT FILE FIRST.
+# Do NOT re-audit v30_creation_steps.md from scratch.
+# Do NOT add to this list without checking that file first.
+# New finding? Add to v30_open_questions.md. Already there? Say "already logged at Q#".
 
 ---
 
@@ -14,7 +21,7 @@
 
 | Priority | Step | File | Status |
 |----------|------|------|--------|
-| 1 — DO NOW | step Y-C0 | v30_creation_steps.md | PENDING |
+| 1 — DO NOW | step X-C0 | v30_creation_steps.md | PENDING |
 | 2 | step X-C0 | v30_creation_steps.md | PENDING — after Y-C0 |
 | 3 | step Y-C1 | v30_creation_steps.md | PENDING — after X-C0 |
 

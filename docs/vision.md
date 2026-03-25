@@ -443,6 +443,57 @@ Skipping this = building on unproven foundation.
 
 ---
 
+## Agent-XYZ as a Universal API (v3.2 → v4.1)
+
+The end goal: Agent-XYZ exposed as an API that any platform can call.
+Not just a CLI tool or a Telegram bot — a programmable engine.
+
+```
+Any platform (Open WebUI, Cursor, OpenClaw, custom UI, CI/CD, VS Code)
+        ↓ HTTP POST
+FastAPI Control API          ← thin wrapper, zero logic
+        ↓
+Orchestrator                 ← unchanged
+        ↓
+Agent-Y + Agent-X            ← unchanged
+```
+
+### What the API exposes:
+```
+POST /project/new            {"goal": "build a quant bot"}
+POST /project/fix            {"log": "...", "repo": "..."}
+GET  /project/{slug}         → status, current task, progress %
+GET  /projects               → all projects + status
+DELETE /project/{slug}       → wipe from VPS (archive GitHub)
+POST /project/{slug}/resume  → continue stalled project
+```
+
+### Platform compatibility (no extra work):
+```
+Open WebUI   → OpenAI-compatible wrapper (format responses like OpenAI chat)
+Cursor       → MCP server — expose Agent-XYZ as a native tool
+OpenClaw     → direct HTTP calls (trivial)
+VS Code ext  → HTTP calls to Control API
+Telegram     → already planned v3.2
+Any CI/CD    → webhook → API → fix (already works today)
+```
+
+### Why this is reachable solo:
+- FastAPI webhook server already exists (v2.1)
+- Control API = expand the existing server, not rebuild
+- Orchestrator loop doesn't change — just exposed over HTTP
+- OpenAI wrapper = format shim only (~30 lines)
+- MCP server = medium effort but unlocks Cursor natively
+
+### Build order (locked):
+```
+v3.2  → Control API + Telegram (foundation)
+v4.0  → OpenAI-compatible wrapper → Open WebUI works instantly
+v4.1  → MCP server → Cursor/VS Code native integration
+```
+
+---
+
 ## The One Rule
 
 Every build decision must answer:
