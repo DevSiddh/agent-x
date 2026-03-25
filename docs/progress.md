@@ -997,3 +997,14 @@ v1.1 unlocked: local model (Ollama + Qwen2.5-7B) for Agent-Y reasoning
 ### Tree-sitter Migration (v3.1, not v3.0)
 Router pattern: .py → ast_mapper (stdlib ast, exists), .js/.ts/.php/.java → treesitter_mapper (new)
 Never modify ast_mapper.py — add router alongside it
+
+### Workspace Architecture (locked 2026-03-25 — Gemini review)
+- WORKSPACE_ROOT: env var in .env — hard OS boundary, never in SharedState
+- project_slug: stored in SharedState — e.g. "crypto-bot-v1"
+- Full path resolved: WORKSPACE_ROOT / project_slug (local only, not portable)
+- Safe path guardrail: resolve_safe_path() checks every path before write
+- T0 always scaffold: cookiecutter template before any write_file
+- Templates needed: fastapi / cli / bot-telegram / script
+- write_file: new files only
+- file_edit: search_block + replace_block — fails if search_block not found
+- ArtifactEntry: file + last_modified_task + checksum (sha256) — corruption guard

@@ -84,6 +84,12 @@ v3.0 Hard Rules (locked 2026-03-25):
 - Replan: inject failed diff + Thompson history — never blind replan
 - Replan: surgical sub-tasking only (4 → 4a+4b), never rewrite full plan[]
 - global_interfaces: ast_mapper on files_to_touch only, updated after every task
+- WORKSPACE_ROOT in .env only — never hardcode paths, never in SharedState
+- project_slug in SharedState — Orchestrator resolves full path locally
+- resolve_safe_path() must wrap EVERY file write — no exceptions
+- T0 = scaffold task always first (cookiecutter)
+- write_file for new files, file_edit for modifications — never write_file on existing files
+- ArtifactEntry checksum checked before each task — halt if file changed outside pipeline
 v3.1 → Project memory: goal + architecture + progress state
 v4.0 → Fine-tune local model on prompt stack (distillation) [OPTIONAL — cost optimization only, not required for v4.1]
 v4.1 → Full autonomous loop: idea in → working repo out

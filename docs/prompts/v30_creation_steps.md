@@ -37,8 +37,20 @@ BUILD THIS STEP:
        # This is the ONLY anti-reward-hacking gate — Agent-X cannot fake passing tests
        # that cover all 3 case types
 
+   class ArtifactEntry(BaseModel):
+       file: str
+       last_modified_task: str
+       checksum: str  # sha256 — verified before each task; halt if changed outside pipeline
+
+   class TaskAction(str, Enum):
+       SCAFFOLD   = "scaffold"
+       WRITE_FILE = "write_file"
+       FILE_EDIT  = "file_edit"
+       RUN_TESTS  = "run_tests"
+
    class Task(BaseModel):
        task_id: str
+       action: TaskAction
        description: str
        files_to_touch: list[str] = Field(max_length=3)
        patch_order: list[str] = []
@@ -49,12 +61,13 @@ BUILD THIS STEP:
 
    class SharedState(BaseModel):
        project_id: str
+       project_slug: str               # e.g. "crypto-bot-v1" — WORKSPACE_ROOT resolves full path
        goal: str
        plan: list[Task]
        current_task_id: str | None = None
        failed_task_streak: int = 0
        global_interfaces: dict[str, list[str]] = {}
-       artifacts: list[str] = []
+       artifacts: list[ArtifactEntry] = []
 
    class ReplanAnalysis(BaseModel):
        root_cause_of_failure: str
@@ -71,6 +84,40 @@ BUILD THIS STEP:
 
    - Type hints on all fields. Module docstring. __main__ smoke test (instantiate each model).
    - No imports from phase1/ phase2/ phase3/ — standalone schema file.
+
+   ## Workspace Safety (locked 2026-03-25)
+
+   WORKSPACE_ROOT lives in .env (Config), NOT in SharedState.
+   SharedState stores project_slug only (e.g. "crypto-bot-v1").
+   Orchestrator resolves full path: full_path = WORKSPACE_ROOT / project_slug
+
+   Safe path guardrail — wrap EVERY file operation:
+   ```python
+   def resolve_safe_path(relative: str) -> Path:
+       root = Path(os.environ["WORKSPACE_ROOT"]).resolve()
+       full = (root / relative).resolve()
+       if not str(full).startswith(str(root)):
+           raise PermissionError(f"Sandbox escape blocked: {relative}")
+       return full
+   ```
+   All subprocess calls use cwd=resolve_safe_path(project_slug)
+
+   T0 scaffold task:
+   - First task is ALWAYS action=SCAFFOLD
+   - Orchestrator runs cookiecutter with a named template
+   - Templates: fastapi-template, cli-template, bot-telegram-template, script-template
+   - After scaffold: tests/ folder exists before any write_file
+
+   write_file vs file_edit:
+   - write_file: new empty file creation ONLY
+   - file_edit: search_block + replace_block (like git apply but safer)
+   - If search_block not found in file → task FAILS immediately (no silent corruption)
+   - Task 3 creates file (write_file), Task 7 modifies it (file_edit) — same Task schema
+
+   ArtifactEntry checksum:
+   - artifacts list in SharedState tracks every file written
+   - Orchestrator checks sha256 checksum before each task
+   - If file changed outside pipeline → HALT immediately
 
 2. agent_y/reasoner.py — ADD creation mode
 
