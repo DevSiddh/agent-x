@@ -1,24 +1,36 @@
 # Agent-X + Agent-Y | Session Prompts — INDEX
-# Say "step N" → Claude loads the right file below and executes that step.
 # Last updated: 2026-03-25
-# Status: v3.0 NEXT — Y-C0 READY — 491 tests passing
 
 ---
 
-## ACTIVE (current phase — load these now)
-
-@docs/prompts/v21_steps.md       ← Steps B0 B1 B2 B3 (v2.1 webhook integration)
+## ⚡ NEXT STEP: Y-C0
+# DO THIS AND NOTHING ELSE.
+# Say "step Y-C0" → read v30_creation_steps.md → execute → update progress.md → STOP.
+# Do NOT look at GATED section. Do NOT start any other step.
 
 ---
 
-## PENDING (load on demand when phase starts)
+## ACTIVE QUEUE (execute in this order, one at a time)
 
-@docs/prompts/rag_steps.md        ← Steps RAG RAG-NEG (v2.1 RAG upgrade — triple hybrid)
-@docs/prompts/v215_steps.md      ← Steps C0 C1 C2 (v2.1.5 memory engine)
-@docs/prompts/v216_steps.md      ← Steps C3 C3b C4 (v2.1.6 multi-language + visual)
-@docs/prompts/v22_steps.md       ← Steps D0 D1 (v2.2 context tools + auto-PR)
-@docs/prompts/v23_analytics.md   ← Steps E0 E1 E2 (v2.3 analytics — $0 cost)
-@docs/prompts/v30_creation_steps.md  ← Steps Y-C0 X-C0 (v3.0 creation mode)
+| Priority | Step | File | Status |
+|----------|------|------|--------|
+| 1 — DO NOW | step Y-C0 | v30_creation_steps.md | PENDING |
+| 2 | step X-C0 | v30_creation_steps.md | PENDING — after Y-C0 |
+| 3 | step Y-C1 | v30_creation_steps.md | PENDING — after X-C0 |
+
+---
+
+## GATED — DO NOT START (gate not met — skip entirely)
+
+These steps are LOCKED. Do not attempt. Do not plan. Move past them.
+
+| Step | Gate required | Current |
+|------|--------------|---------|
+| step C4 | Playwright installed + frontend project exists | NOT MET |
+| step E2 | 3+ real repos in memory.jsonl | NOT MET (1 repo) |
+| step RAG-NEG | 10+ test_failure rejections | NOT MET |
+| step A4 | DeepSeek API bill >$30/mo OR sensitive code | NOT MET |
+| step AUDIT | Run only when explicitly asked | ON DEMAND |
 
 ---
 
@@ -28,39 +40,14 @@
 
 ---
 
-## ARCHIVED (DONE — load only for reference)
+## ARCHIVED (DONE — reference only, never re-execute)
 
-@docs/prompts/agent_y_steps.md   ← Steps A0 A1 A2 (Agent-Y v1 — COMPLETE)
-@docs/prompts/v1_steps_9_14.md   ← Steps 9–14 + A4 (v1.1–v1.4 — COMPLETE)
+@docs/prompts/agent_y_steps.md   ← Steps A0 A1 A2 A3 (Agent-Y v1 — COMPLETE)
+@docs/prompts/v1_steps_9_14.md   ← Steps 9–14 (v1.1–v1.4 — COMPLETE)
 @docs/prompts/v1_steps_0_8.md    ← Steps 0–8 (v1 foundation — COMPLETE)
-
----
-
-## STEP LOCATOR
-
-| Say         | File                        | Status   |
-|-------------|-----------------------------|----------|
-| step B0     | v21_steps.md                | DONE     |
-| step B1     | v21_steps.md                | DONE     |
-| step B2     | v21_steps.md                | DONE     |
-| step B3     | v21_steps.md                | DONE     |
-| step C0     | v215_steps.md               | DONE     |
-| step C1     | v215_steps.md               | DONE     |
-| step C2     | v215_steps.md               | DONE     |
-| step C3     | v216_steps.md               | DONE     |
-| step AUDIT  | v216_steps.md               | PENDING        |
-| step RAG    | rag_steps.md                | DONE     |
-| step CLS    | rag_steps.md                | DONE     |
-| step RAG-NEG| rag_steps.md                | PENDING (gate: 10+ logic_issue rejections) |
-| step E1     | v23_analytics.md            | DONE     |
-| step C3b    | v216_steps.md               | DONE     |
-| step C4     | v216_steps.md               | PENDING  |
-| step D0     | v22_steps.md                | DONE     |
-| step D1     | v22_steps.md                | DONE     |
-| step E0     | v23_analytics.md            | DONE     |
-| step E2     | v23_analytics.md            | PENDING (gate: 3+ repos) |
-| step Y-C0   | v30_creation_steps.md       | PENDING  |
-| step X-C0   | v30_creation_steps.md       | PENDING  |
-| step Y-C1   | v30_creation_steps.md       | PENDING (after X-C0) |
-| step A4     | v1_steps_9_14.md            | TRIGGER  |
-| audit       | audit.md                    | ALWAYS   |
+@docs/prompts/v21_steps.md       ← Steps B0–B3 (v2.1 — COMPLETE)
+@docs/prompts/v215_steps.md      ← Steps C0–C2 (v2.1.5 — COMPLETE)
+@docs/prompts/v216_steps.md      ← Steps C3 C3b (v2.1.6 — COMPLETE)
+@docs/prompts/rag_steps.md       ← Steps RAG CLS (RAG upgrade — COMPLETE)
+@docs/prompts/v22_steps.md       ← Steps D0 D1 (v2.2 — COMPLETE)
+@docs/prompts/v23_analytics.md   ← Steps E0 E1 (v2.3 — COMPLETE)
