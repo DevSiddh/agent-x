@@ -48,6 +48,23 @@ st.set_page_config(
 st.title("🤖 Agent-X Pipeline Dashboard")
 st.caption("Live stats from memory/memory.jsonl + memory/thompson_state.json")
 
+# --- Orchestrator Progress Bar (v3.2) ---
+_state_path = Path(__file__).resolve().parents[1] / "memory" / "state.json"
+if _state_path.exists():
+    try:
+        import json as _json
+        _state = _json.loads(_state_path.read_text())
+        _plan = _state.get("plan", [])
+        _total = len(_plan)
+        _done = sum(1 for t in _plan if t.get("status") in ("completed", "blocked"))
+        _current = _state.get("current_task_id") or "—"
+        _goal = _state.get("goal", "")[:80]
+        st.info(f"**Active project:** {_state.get('project_slug','?')} — {_goal}")
+        st.progress(_done / _total if _total else 0,
+                    text=f"Task {_done}/{_total} — current: {_current}")
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Load data
 # ---------------------------------------------------------------------------

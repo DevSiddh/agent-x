@@ -40,7 +40,8 @@ import structlog
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
 
@@ -393,6 +394,79 @@ async def cmd_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     asyncio.create_task(_run_claude(message, update))
 
 
+async def cmd_approve(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/approve <pr_url> — merge the PR (calls GitHub API)."""
+    await _deny(update) if not context.args else None
+    if not context.args:
+        await _send(update, "Usage: /approve <pr_url>")
+        return
+    pr_url = context.args[0]
+    await _send(update, f"Approving PR: {pr_url}\nMerging...")
+    try:
+        import httpx, os
+        token = os.environ.get("GITHUB_TOKEN", "")
+        # Extract owner/repo/number from URL
+        parts = pr_url.rstrip("/").split("/")
+        owner, repo, number = parts[-4], parts[-3], parts[-1]
+        r = httpx.post(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}/merge",
+            headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+            json={"merge_method": "squash"},
+            timeout=15,
+        )
+        if r.status_code in (200, 201):
+            await _send(update, f"✅ PR #{number} merged.")
+        else:
+            await _send(update, f"❌ Merge failed: {r.status_code} — {r.text[:200]}")
+    except Exception as exc:
+        await _send(update, f"❌ Error: {exc}")
+
+
+async def cmd_reject(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/reject <pr_url> — close the PR without merging."""
+    if not context.args:
+        await _send(update, "Usage: /reject <pr_url>")
+        return
+    pr_url = context.args[0]
+    try:
+        import httpx, os
+        token = os.environ.get("GITHUB_TOKEN", "")
+        parts = pr_url.rstrip("/").split("/")
+        owner, repo, number = parts[-4], parts[-3], parts[-1]
+        r = httpx.patch(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}",
+            headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+            json={"state": "closed"},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            await _send(update, f"🚫 PR #{number} closed.")
+        else:
+            await _send(update, f"❌ Close failed: {r.status_code} — {r.text[:200]}")
+    except Exception as exc:
+        await _send(update, f"❌ Error: {exc}")
+
+
+async def _inline_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle inline approve/reject button presses."""
+    query = update.callback_query
+    await query.answer()
+    action, pr_url = query.data.split("|", 1)
+    context.args = [pr_url]  # type: ignore
+    if action == "approve":
+        await cmd_approve(update, context)
+    elif action == "reject":
+        await cmd_reject(update, context)
+
+
+def make_pr_keyboard(pr_url: str) -> InlineKeyboardMarkup:
+    """Generate inline approve/reject keyboard for a PR notification."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Approve & Merge", callback_data=f"approve|{pr_url}"),
+        InlineKeyboardButton("🚫 Reject", callback_data=f"reject|{pr_url}"),
+    ]])
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _authorized(update):
         await _deny(update)
@@ -434,8 +508,11 @@ def main() -> None:
     app.add_handler(CommandHandler("schedules",   cmd_schedules))
     app.add_handler(CommandHandler("unschedule",  cmd_unschedule))
     app.add_handler(CommandHandler("chain",       cmd_chain))
+    app.add_handler(CommandHandler("approve",     cmd_approve))
+    app.add_handler(CommandHandler("reject",      cmd_reject))
     app.add_handler(CommandHandler("help",        cmd_help))
     app.add_handler(CommandHandler("start",       cmd_help))
+    app.add_handler(CallbackQueryHandler(_inline_button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_chat))
 
     log.info("telegram_bot.polling")

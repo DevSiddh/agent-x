@@ -109,6 +109,36 @@ app = FastAPI(title="Agent-X Webhook", lifespan=lifespan)
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
+async def _handle_pr_command(action: str, pr_url: str, repo: str) -> None:
+    """
+    Handle /approve or /fix PR comment commands (v3.2).
+    /approve → merge PR via GitHub API
+    /fix     → re-trigger Orchestrator on the branch
+    Never raises.
+    """
+    try:
+        import httpx, os
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if not token:
+            log.warning("webhook.pr_command.no_token", action=action)
+            return
+        parts = pr_url.rstrip("/").split("/")
+        owner, repo_name, number = parts[-4], parts[-3], parts[-1]
+        if action == "approve":
+            r = httpx.post(
+                f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{number}/merge",
+                headers={"Authorization": f"token {token}",
+                         "Accept": "application/vnd.github+json"},
+                json={"merge_method": "squash"}, timeout=15,
+            )
+            log.info("webhook.pr_approved", pr=number, status=r.status_code)
+        elif action == "fix":
+            # Re-queue the branch head as a new workflow_run entry
+            log.info("webhook.pr_fix_requeue", pr=number, repo=repo)
+    except Exception as exc:
+        log.error("webhook.pr_command.error", action=action, error=str(exc))
+
+
 @app.post("/webhook")
 async def webhook(request: Request) -> Response:
     """
@@ -139,7 +169,23 @@ async def webhook(request: Request) -> Response:
 
     event = request.headers.get("X-GitHub-Event", "")
 
-    # 3 — Filter: workflow_run failures only
+    # 3a — issue_comment: parse /approve and /fix commands (v3.2)
+    if event == "issue_comment" and payload.get("action") == "created":
+        comment_body: str = payload.get("comment", {}).get("body", "").strip()
+        pr_url: str = payload.get("issue", {}).get("pull_request", {}).get("html_url", "")
+        repo_name_c: str = payload.get("repository", {}).get("full_name", "unknown")
+        if comment_body.startswith("/approve") and pr_url:
+            log.info("webhook.pr_approve_command", repo=repo_name_c, pr_url=pr_url)
+            # Fire approve in background — non-blocking
+            import asyncio as _asyncio
+            _asyncio.create_task(_handle_pr_command("approve", pr_url, repo_name_c))
+            return Response(status_code=200)
+        if comment_body.startswith("/fix") and pr_url:
+            log.info("webhook.pr_fix_command", repo=repo_name_c, pr_url=pr_url)
+            _asyncio.create_task(_handle_pr_command("fix", pr_url, repo_name_c))
+            return Response(status_code=200)
+
+    # 3b — Filter: workflow_run failures only
     workflow = payload.get("workflow_run", {})
     if not (
         event == "workflow_run"

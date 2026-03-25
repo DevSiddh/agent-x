@@ -427,6 +427,38 @@ def create_pr(
         return None
 
 
+def post_task_comment(
+    repo: str,
+    pr_number: int,
+    task_id: str,
+    description: str,
+    status: str,
+) -> bool:
+    """
+    Post a comment on a PR narrating a completed/failed task.
+    Returns True on success. Never raises.
+    structlog: pr_creator.task_comment.ok / pr_creator.task_comment.error
+    """
+    try:
+        token = _get_token()
+        icon = "✅" if status == "completed" else "❌"
+        body = (
+            f"{icon} **Agent-XYZ — Task `{task_id}`** {status}\n\n"
+            f"> {description}\n\n"
+            f"*Automated narration by Agent-XYZ*"
+        )
+        resp = _gh("POST", f"/repos/{repo}/issues/{pr_number}/comments",
+                   token, json={"body": body})
+        if resp and resp.status_code == 201:
+            log.info("pr_creator.task_comment.ok", task_id=task_id, pr=pr_number)
+            return True
+        log.warning("pr_creator.task_comment.error", status=resp.status_code if resp else "no_resp")
+        return False
+    except Exception as exc:
+        log.error("pr_creator.task_comment.error", error=str(exc))
+        return False
+
+
 def open_structural_issue(
     repo: str,
     run_id: str,

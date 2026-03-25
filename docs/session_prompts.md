@@ -3,10 +3,10 @@
 
 ---
 
-## ⚡ NEXT STEP: v3.2 Interface Layer
-# DO THIS AND NOTHING ELSE.
-# Rewire Telegram + Streamlit → Orchestrator. Add brief watcher + Telegram approval gate.
-# v3.0 COMPLETE — Y-C0 + X-C0 + Y-C1 all DONE. 540 tests passing.
+## ⚡ v3 CLOSED — NEXT: v4.1 Full Autonomous Loop
+# v3.2 DONE — brief watcher + Streamlit progress + Telegram approve/reject + PR comments + webhook /approve /fix
+# v3 fully closed. 540 tests passing.
+# Next: v4.1 — idea in → working repo out.
 
 ## LIMITATIONS / OPEN QUESTIONS
 # docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
