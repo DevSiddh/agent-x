@@ -21,9 +21,10 @@
 
 | Priority | Step | File | Status |
 |----------|------|------|--------|
-| 1 — DO NOW | step X-C0 | v30_creation_steps.md | PENDING |
-| 2 | step X-C0 | v30_creation_steps.md | PENDING — after Y-C0 |
-| 3 | step Y-C1 | v30_creation_steps.md | PENDING — after X-C0 |
+| ✅ DONE | step Y-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
+| ✅ DONE | step X-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
+| ✅ DONE | step Y-C1 | v30_creation_steps.md | DONE — 2026-03-25 |
+| 1 — DO NOW | step v3.2 | docs/CLAUDE.md v3.2 section | PENDING |
 
 ---
 
