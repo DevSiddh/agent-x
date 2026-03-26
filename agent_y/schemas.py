@@ -56,6 +56,7 @@ class Task(BaseModel):
     status: Literal["pending", "in_progress", "completed", "failed", "blocked"] = "pending"
     failed_attempts: int = 0
     variations_tried: int = 0  # Best-of-N: how many variants attempted before pass
+    hint: str = ""  # optional constraint injected into Agent-X prompt
 
 
 class SharedState(BaseModel):
@@ -69,6 +70,8 @@ class SharedState(BaseModel):
     failed_task_streak: int = 0
     global_interfaces: dict[str, list[str]] = {}
     artifacts: list[ArtifactEntry] = []
+    github_repo: str = ""      # e.g. "DevSiddh/agent-x" — for PR comments
+    pr_number: int | None = None  # set after PR is opened
 
 
 class ReplanAnalysis(BaseModel):

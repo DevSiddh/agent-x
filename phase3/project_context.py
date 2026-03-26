@@ -33,6 +33,8 @@ def scaffold_context(state: SharedState, repo_path: Path) -> None:
     """
     try:
         context_path = repo_path / CONTEXT_FILE
+        if context_path.exists():
+            return  # already scaffolded — don't overwrite on resume
         context_path.parent.mkdir(parents=True, exist_ok=True)
         content = (
             f"# Agent-XYZ Project Context\n\n"

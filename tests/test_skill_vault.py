@@ -282,8 +282,10 @@ class TestBestOfN:
 
     def test_variation_1_passes_stop_immediately(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = self._make_state_with_task()
@@ -303,8 +305,10 @@ class TestBestOfN:
 
     def test_variation_1_fails_variation_2_tried(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = self._make_state_with_task()
@@ -324,8 +328,10 @@ class TestBestOfN:
 
     def test_all_variations_fail_marks_failed(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = self._make_state_with_task()
@@ -339,8 +345,10 @@ class TestBestOfN:
 
     def test_retrospective_fires_on_failed_attempts_gte_2(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         criteria = AcceptanceCriteria(

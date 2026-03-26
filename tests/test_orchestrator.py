@@ -221,8 +221,10 @@ class TestIsDone:
 class TestRunOnce:
     def test_successful_task_updates_global_interfaces(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         repo.mkdir(exist_ok=True)
@@ -239,8 +241,10 @@ class TestRunOnce:
 
     def test_failed_test_marks_task_failed(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = _make_state([_make_task(patch_order=[])])
@@ -254,8 +258,10 @@ class TestRunOnce:
 
     def test_streak_resets_to_zero_on_success(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = _make_state([_make_task(patch_order=[])])
@@ -269,8 +275,10 @@ class TestRunOnce:
 
     def test_no_pending_tasks_returns_state_unchanged(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         task = _make_task()
@@ -283,8 +291,10 @@ class TestRunOnce:
 
     def test_streak_2_triggers_agent_y_replan(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         state = _make_state([_make_task(patch_order=[])])
@@ -299,8 +309,10 @@ class TestRunOnce:
 class TestRunLoop:
     def test_agent_y_called_when_plan_empty(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)
@@ -311,8 +323,10 @@ class TestRunLoop:
 
     def test_agent_y_not_called_on_normal_progress(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)
@@ -325,8 +339,10 @@ class TestRunLoop:
 
     def test_is_done_exits_loop_early(self, tmp_path, monkeypatch):
         import phase3.state_manager as sm
+        import phase3.project_context as pc
         monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
         monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
 
         repo = _make_git_repo(tmp_path / "repo")
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)

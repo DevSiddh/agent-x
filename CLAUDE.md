@@ -30,9 +30,9 @@ User gives an idea → Agent-Y thinks, designs, architects, breaks into tasks
 → loop until done. CI/CD repair is just the first proving ground.
 Full vision → @docs/vision.md
 
-## Current Build Status (2026-03-25) — v3.0 NEXT
-491 tests passing — memory.jsonl 406+ entries — thompson_state.json active
-v2.1 B0-B3 DONE — v2.2 D0+D1 DONE — v2.3 E0+E1 DONE — Step Y-C0 READY
+## Current Build Status (2026-03-26) — v4.1 NEXT
+559 tests passing — memory.jsonl 513+ entries — registry.jsonl LIVE — skill_vault.jsonl LIVE
+v3 FULLY CLOSED — Y-C0 + X-C0 + Y-C1 + v3.1 + v3.2 all DONE
 Full step history → @docs/progress.md
 
 ## Pipeline (strict order — do not change)

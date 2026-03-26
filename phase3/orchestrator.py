@@ -21,9 +21,10 @@ if str(_REPO_ROOT) not in sys.path:
 from agent_y.retrospective import generate_skill
 from agent_y.schemas import SharedState, Task, TaskAction
 from phase2.executor.runner import RunResult, apply_patch, rollback, write_file
+from phase2.tools.pr_creator import post_task_comment
 from phase2.skills.vault import SkillVault
 from phase2.tools.ast_mapper import map_repo
-from phase3.project_context import append_task, register_project, update_registry_last_task
+from phase3.project_context import append_task, register_project, scaffold_context, update_registry_last_task
 from phase3.state_manager import (
     get_next_pending_task,
     load_state,
@@ -160,6 +161,15 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     # 6. Append to .agent/context.md + update registry
     append_task(state, task, repo_path)
     update_registry_last_task(state.project_slug, task.task_id)
+    # 7. Narrate task on PR (if PR is open)
+    if state.github_repo and state.pr_number:
+        post_task_comment(
+            repo=state.github_repo,
+            pr_number=state.pr_number,
+            task_id=task.task_id,
+            description=task.description,
+            status="completed",
+        )
 
     # Skill vault: update win
     if used_skill_ids:
@@ -252,7 +262,6 @@ def run_loop(
 
     # Register project + scaffold context on first run
     register_project(state)
-    from phase3.project_context import scaffold_context
     scaffold_context(state, repo_path)
 
     for iteration in range(max_iterations):
