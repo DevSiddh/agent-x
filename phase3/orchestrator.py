@@ -45,10 +45,12 @@ log = structlog.get_logger()
 
 AGENT_X_STATIC_PROMPT = (
     "You are Agent-X. Satisfy the Acceptance Criteria exactly. "
-    "Write tests/test_<name>.py using pytest.mark.parametrize for the provided cases. "
-    "Then implement src/<name>.py to make them pass. "
+    "Use FLAT file structure — no src/ or tests/ subdirectories. "
+    "All files live in the project root. "
+    "Import using the exact filename without path prefix: "
+    "e.g. if the file is main.py, import as `from main import add`. "
     "Hard limits: 50 lines per new file, 15 lines per edit. "
-    "Return raw Python only. No markdown. No explanation."
+    "Return raw Python only. No markdown. No code fences. No explanation."
 )
 
 
@@ -222,6 +224,16 @@ def _commit_context(repo_path: Path, task_id: str) -> None:
         log.warning("orchestrator.context_commit_error", task_id=task_id, error=str(exc))
 
 
+def _strip_code_fences(content: str) -> str:
+    """Strip markdown code fences from LLM output before writing to disk."""
+    lines = content.strip().splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
 def _execute_files(task: Task, repo_path: Path) -> None:
     """Placeholder to represent one execution attempt slot."""
     return None
@@ -279,7 +291,7 @@ def _execute_file_ops(task: Task, repo_path: Path) -> bool:
         action = TaskAction.WRITE_FILE if is_new_file(file_str, repo_path) else TaskAction.FILE_EDIT
 
         prompt = _build_agent_x_prompt(task, file_str, action)
-        content = _call_deepseek(prompt)
+        content = _strip_code_fences(_call_deepseek(prompt))
         if not content:
             log.warning("orchestrator.file_op_failed", file=file_str, error="empty_deepseek_response")
             return False
@@ -300,13 +312,17 @@ def _run_tests(repo_path: Path, task: Task) -> bool:
     try:
         target = task.acceptance_criteria.target_function
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(repo_path / "tests"), "-q",
+            [sys.executable, "-m", "pytest", str(repo_path), "-q",
              "-k", target, "--tb=short"],
             cwd=repo_path,
             capture_output=True,
             text=True,
             timeout=60,
         )
+        if result.returncode != 0:
+            log.warning("orchestrator.test_failed",
+                        stdout=result.stdout[-600:],
+                        stderr=result.stderr[-200:])
         return result.returncode == 0
     except Exception as exc:
         log.error("orchestrator.test_runner_error", error=str(exc))

@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class AcceptanceCase(BaseModel):
@@ -17,6 +17,16 @@ class AcceptanceCase(BaseModel):
 
     inputs: list[str]
     expected: str
+
+    @field_validator("inputs", mode="before")
+    @classmethod
+    def coerce_inputs_to_str(cls, v: list) -> list[str]:
+        return [str(i) for i in v]
+
+    @field_validator("expected", mode="before")
+    @classmethod
+    def coerce_expected_to_str(cls, v: object) -> str:
+        return str(v)
 
 
 class AcceptanceCriteria(BaseModel):

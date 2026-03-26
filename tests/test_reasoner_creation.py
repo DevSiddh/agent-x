@@ -296,6 +296,24 @@ class TestSchemas:
         )
         assert len(criteria.cases) == 3
 
+    def test_acceptance_case_coerces_int_inputs_to_str(self) -> None:
+        """DeepSeek returns numeric inputs as ints — schema must coerce to str."""
+        case = AcceptanceCase(inputs=[2, 3], expected=5)  # type: ignore[arg-type]
+        assert case.inputs == ["2", "3"]
+        assert case.expected == "5"
+
+    def test_acceptance_case_coerces_mixed_inputs(self) -> None:
+        """Mixed int/str inputs all coerced to str."""
+        case = AcceptanceCase(inputs=[1, "two", 3.0], expected=0)  # type: ignore[arg-type]
+        assert case.inputs == ["1", "two", "3.0"]
+        assert case.expected == "0"
+
+    def test_acceptance_case_pure_str_inputs_unchanged(self) -> None:
+        """String inputs pass through without change."""
+        case = AcceptanceCase(inputs=["add(1,2)"], expected="3")
+        assert case.inputs == ["add(1,2)"]
+        assert case.expected == "3"
+
     def test_task_status_transitions(self) -> None:
         task = Task(
             task_id="T1",

@@ -271,6 +271,10 @@ Break a goal into ordered tasks. Each task must:
 - Touch ≤ 3 files (files_to_touch max 3 items)
 - Have exactly 3 acceptance criteria cases: a Happy Path case, an Edge Case, and an Error Case
 - Be atomic and independently testable
+- ALWAYS include a test file (test_<name>.py) as the FIRST item in patch_order
+- Use FLAT file structure — all files in project root, no src/ or tests/ subdirectories
+- Test file imports: use module name only, e.g. "from add import add" not "from src.add import add"
+- All inputs and expected values in acceptance criteria MUST be strings
 
 Output valid JSON only. Start with { and nothing else before it.
 
@@ -279,16 +283,16 @@ Required JSON schema:
   "tasks": [
     {
       "task_id": "T1",
-      "action": "scaffold" | "write_file" | "file_edit" | "run_tests",
+      "action": "write_file",
       "description": "what this task does",
-      "files_to_touch": ["file.py"],
-      "patch_order": ["file.py"],
+      "files_to_touch": ["test_add.py", "add.py"],
+      "patch_order": ["test_add.py", "add.py"],
       "acceptance_criteria": {
-        "target_function": "function_name",
+        "target_function": "add",
         "cases": [
-          {"inputs": ["arg1"], "expected": "result"},
-          {"inputs": ["edge_input"], "expected": "edge_result"},
-          {"inputs": ["error_input"], "expected": "error_result"}
+          {"inputs": ["add(2, 3)"], "expected": "5"},
+          {"inputs": ["add(0, 0)"], "expected": "0"},
+          {"inputs": ["add(-1, 1)"], "expected": "0"}
         ]
       },
       "depends_on": []
@@ -371,12 +375,13 @@ def plan_goal(goal: str, state: SharedState) -> list[Task]:
             )
         try:
             response = client.chat.completions.create(
-                model="deepseek-reasoner",
+                model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": CREATION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
-                max_tokens=1000,
+                max_tokens=2000,
+                temperature=0.2,
             )
             raw = response.choices[0].message.content or ""
             parsed = _extract_json(raw)
