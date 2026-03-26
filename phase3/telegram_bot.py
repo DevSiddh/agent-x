@@ -208,11 +208,73 @@ def start_new_project(token: str, chat_id: str, raw_text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+def _cmd_list(token: str, chat_id: str) -> None:
+    """/list — show all projects with status."""
+    from phase3.project_manager import list_projects
+    entries = list_projects()
+    if not entries:
+        _reply(token, chat_id, "No projects yet.")
+        return
+    lines = ["📋 *Projects:*\n"]
+    for e in entries:
+        status = e.get("status", "?")
+        icon = {"completed": "✅", "active": "🔄", "failed": "❌",
+                "blocked_waiting_for_user": "⏳"}.get(status, "•")
+        lines.append(f"{icon} `{e['project_slug']}` — {status}")
+    _reply(token, chat_id, "\n".join(lines))
+
+
+def _cmd_delete(token: str, chat_id: str, args: str) -> None:
+    """/delete slug [--hard] — archive GitHub repo by default, delete with --hard."""
+    parts = args.strip().split()
+    if not parts:
+        _reply(token, chat_id, "Usage: /delete project_slug  (add --hard to delete GitHub repo)")
+        return
+    slug = parts[0]
+    hard = "--hard" in parts
+    from phase3.project_manager import delete_project
+    msg = delete_project(slug, archive_github=not hard)
+    _reply(token, chat_id, msg)
+
+
+def _cmd_show(token: str, chat_id: str, args: str) -> None:
+    """/show slug — print .agent/context.md for a project."""
+    slug = args.strip()
+    if not slug:
+        _reply(token, chat_id, "Usage: /show project_slug")
+        return
+    workspace = Path(os.environ.get("WORKSPACE_ROOT", str(_REPO_ROOT / "projects")))
+    ctx = workspace / slug / ".agent" / "context.md"
+    if ctx.exists():
+        content = ctx.read_text(encoding="utf-8")[:3000]
+        _reply(token, chat_id, f"📄 *{slug}/.agent/context.md*\n\n{content}")
+    else:
+        _reply(token, chat_id, f"❌ No context.md found for {slug}")
+
+
+# ---------------------------------------------------------------------------
 # Message handlers
 # ---------------------------------------------------------------------------
 
 def handle_text(token: str, chat_id: str, text: str) -> None:
-    """State-aware router: resume blocked project OR start new one."""
+    """State-aware router: commands → handler, blocked → resume, else → new project."""
+    if text.startswith("/"):
+        parts = text.split(maxsplit=1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+        if cmd == "/list":
+            _cmd_list(token, chat_id)
+        elif cmd == "/delete":
+            _cmd_delete(token, chat_id, args)
+        elif cmd == "/show":
+            _cmd_show(token, chat_id, args)
+        else:
+            _reply(token, chat_id, "Commands: /list  /delete slug [--hard]  /show slug")
+        return
+
     blocked = get_blocked_project()
     if blocked:
         resume_project(token, chat_id, blocked["project_slug"], text)

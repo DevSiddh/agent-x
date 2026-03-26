@@ -63,6 +63,10 @@ def _trigger_orchestrator(brief: dict, brief_path: Path) -> None:
         # Init git repo before orchestrator touches any files
         _init_git_repo(repo_path)
 
+        # Create GitHub repo + wire remote (no-op if token missing)
+        from phase3.project_manager import setup_github
+        setup_github(project_id, repo_path)
+
         # Clear stale state so run_loop starts fresh
         if STATE_PATH.exists():
             STATE_PATH.unlink()
