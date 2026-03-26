@@ -10,10 +10,10 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v4.1 IN PROGRESS — 595 tests passing
-memory.jsonl: 513+ entries | registry.jsonl: LIVE (status updates wired) | skill_vault.jsonl: LIVE
-DeepSeek wired. plan_goal() integrated. rollback fix (staged files). TestReport rename fixed. Q3 done.
-Next: end-to-end test with real brief.yaml on VPS.
+## Current Status: v4.1 PROVEN — 596 tests passing
+memory.jsonl: 513+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
+brief_watcher LIVE. Drop brief.yaml → working repo in 12 seconds. End-to-end proven on VPS.
+Next: Telegram notification when loop completes.
 
 ---
 

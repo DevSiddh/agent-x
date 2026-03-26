@@ -32,7 +32,7 @@
 | ✅ DONE | Q1 fix | registry status | DONE — 2026-03-26 |
 | ✅ DONE | bugfix | rollback staged files + TestReport rename | DONE — 2026-03-26 |
 | ✅ DONE | Q3 fix | .agent/context.md commit to GitHub after task | DONE — 2026-03-26 |
-| 2 — THEN | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | PENDING |
+| ✅ DONE | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | DONE — 2026-03-26 |
 
 ---
 
