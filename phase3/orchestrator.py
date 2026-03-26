@@ -381,6 +381,9 @@ def run_loop(
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv(_REPO_ROOT / ".env")
+
     from agent_y.schemas import AcceptanceCase, AcceptanceCriteria, Task as T, TaskAction
 
     _criteria = AcceptanceCriteria(
