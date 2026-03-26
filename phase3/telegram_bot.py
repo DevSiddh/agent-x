@@ -80,55 +80,153 @@ def get_blocked_project() -> dict | None:
     return None
 
 
-SPEC_MENU = """
-1️⃣ Project type:
-   a) New project from scratch
-   b) Improve existing code
-   c) Other (describe)
+# ---------------------------------------------------------------------------
+# Dynamic spec menu — questions chosen based on goal keywords
+# ---------------------------------------------------------------------------
+
+_CATEGORIES: list[tuple[str, list[str]]] = [
+    ("web_api",   ["api", "fastapi", "flask", "django", "rest", "endpoint", "backend", "server"]),
+    ("cli",       ["cli", "command line", "terminal", "script", "tool", "argparse"]),
+    ("data",      ["data", "csv", "pandas", "etl", "pipeline", "analysis", "dataset", "ml", "model"]),
+    ("bot",       ["bot", "telegram", "discord", "slack", "automation", "scraper", "crawler"]),
+    ("frontend",  ["frontend", "ui", "react", "vue", "html", "dashboard", "streamlit"]),
+]
+
+_SPEC_MENUS: dict[str, str] = {
+    "web_api": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
 
 2️⃣ Database:
    a) SQLite  b) PostgreSQL  c) MongoDB  d) None  e) Other
 
 3️⃣ Auth:
-   a) JWT  b) Basic auth  c) None  d) Other
+   a) JWT  b) API key  c) None  d) Other
+
+4️⃣ Extra? (e.g. rate limiting, CORS, Docker) or 'none'
+""",
+    "cli": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
+
+2️⃣ Input source:
+   a) Command-line args  b) File (CSV/JSON)  c) Stdin  d) Other
+
+3️⃣ Output:
+   a) Print to terminal  b) Write to file  c) Both  d) Other
+
+4️⃣ Extra? (e.g. config file, logging, packaging) or 'none'
+""",
+    "data": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
+
+2️⃣ Data source:
+   a) CSV file  b) Database  c) API  d) Other
+
+3️⃣ Output:
+   a) Print summary  b) CSV/JSON file  c) Chart/plot  d) Other
+
+4️⃣ Extra? (e.g. pandas, scheduling, model type) or 'none'
+""",
+    "bot": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
+
+2️⃣ Platform:
+   a) Telegram  b) Discord  c) Slack  d) Other
+
+3️⃣ Trigger:
+   a) On message  b) Scheduled (cron)  c) Both  d) Other
+
+4️⃣ Extra? (e.g. database, webhooks, specific commands) or 'none'
+""",
+    "frontend": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
+
+2️⃣ Framework:
+   a) Streamlit  b) React  c) Plain HTML/CSS  d) Other
+
+3️⃣ Data source:
+   a) Static  b) REST API  c) Database  d) Other
+
+4️⃣ Extra? (e.g. auth, charts, mobile-friendly) or 'none'
+""",
+    "general": """
+1️⃣ New project or improve existing?
+   a) New  b) Improve existing  c) Other
+
+2️⃣ Database needed?
+   a) SQLite  b) PostgreSQL  c) None  d) Other
+
+3️⃣ Any external integrations?
+   a) REST API  b) File I/O  c) None  d) Other
 
 4️⃣ Extra requirements? (type freely or 'none')
+""",
+}
 
-Reply like:  1a, 2a, 3c, none
-Or mix:      1a, 2e Redis, 3d OAuth2, add rate limiting
-""".strip()
-
-# Maps option letter → human-readable label per question
-_SPEC_MAP: dict[str, dict[str, str]] = {
-    "1": {"a": "New project from scratch", "b": "Improve existing code"},
-    "2": {"a": "SQLite", "b": "PostgreSQL", "c": "MongoDB", "d": "No database"},
-    "3": {"a": "JWT auth", "b": "Basic auth", "c": "No auth"},
+# Per-category spec label maps for parse_spec_reply
+_SPEC_MAPS: dict[str, dict[str, dict[str, str]]] = {
+    "web_api":  {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "SQLite", "b": "PostgreSQL", "c": "MongoDB", "d": "No database"},
+                 "3": {"a": "JWT auth", "b": "API key auth", "c": "No auth"}},
+    "cli":      {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "CLI args input", "b": "File input", "c": "Stdin"},
+                 "3": {"a": "Print output", "b": "File output", "c": "Both"}},
+    "data":     {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "CSV input", "b": "Database input", "c": "API input"},
+                 "3": {"a": "Print summary", "b": "File output", "c": "Chart output"}},
+    "bot":      {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "Telegram", "b": "Discord", "c": "Slack"},
+                 "3": {"a": "On message", "b": "Scheduled", "c": "Both"}},
+    "frontend": {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "Streamlit", "b": "React", "c": "Plain HTML"},
+                 "3": {"a": "Static data", "b": "REST API", "c": "Database"}},
+    "general":  {"1": {"a": "New project", "b": "Improve existing"},
+                 "2": {"a": "SQLite", "b": "PostgreSQL", "c": "No database"},
+                 "3": {"a": "REST API integration", "b": "File I/O", "c": "No integrations"}},
 }
 
 
-def parse_spec_reply(reply: str) -> str:
+def detect_category(goal: str) -> str:
+    """Return the project category based on keywords in the goal."""
+    g = goal.lower()
+    for category, keywords in _CATEGORIES:
+        if any(re.search(r"\b" + re.escape(kw) + r"\b", g) for kw in keywords):
+            return category
+    return "general"
+
+
+def generate_spec_menu(goal: str) -> str:
+    """Return a spec menu tailored to the project type."""
+    category = detect_category(goal)
+    return _SPEC_MENUS[category].strip()
+
+
+def parse_spec_reply(reply: str, category: str = "general") -> str:
     """
     Convert structured reply (e.g. '1a, 2b, 3c, add rate limiting') into
     plain-English spec string for Agent-Y.
     Unknown tokens passed through as-is (free text).
     """
+    spec_map = _SPEC_MAPS.get(category, _SPEC_MAPS["general"])
     parts = [p.strip() for p in reply.replace(";", ",").split(",")]
     resolved: list[str] = []
     for part in parts:
         if not part or part.lower() == "none":
             continue
-        # Match patterns like "1a", "2e Redis", "3d OAuth2 with refresh tokens"
-        import re
         m = re.match(r"^([1-4])([a-e])\s*(.*)", part, re.IGNORECASE)
         if m:
             q, opt, extra = m.group(1), m.group(2).lower(), m.group(3).strip()
-            label = _SPEC_MAP.get(q, {}).get(opt)
+            label = spec_map.get(q, {}).get(opt)
             if label:
                 resolved.append(f"{label}{': ' + extra if extra else ''}")
             else:
-                resolved.append(part)  # unknown option → pass through
+                resolved.append(part)
         else:
-            resolved.append(part)  # free text
+            resolved.append(part)
     return ", ".join(resolved) if resolved else reply
 
 
@@ -157,7 +255,8 @@ def resume_project(token: str, chat_id: str, project_slug: str, user_reply: str)
     if pending and pending.get("project_id") == project_slug:
         # Sub-case A: spec collection complete → parse menu reply → launch build
         original_goal = pending["goal"]
-        parsed_specs = parse_spec_reply(user_reply)
+        category = pending.get("category", "general")
+        parsed_specs = parse_spec_reply(user_reply, category)
         full_goal = apply_universal_template(
             f"{original_goal}\n\nUser specs: {parsed_specs}"
         )
@@ -202,11 +301,12 @@ def resume_project(token: str, chat_id: str, project_slug: str, user_reply: str)
         _reply(token, chat_id, f"❌ Resume failed: {exc}")
 
 
-def _save_pending_spec(goal: str, slug: str) -> None:
+def _save_pending_spec(goal: str, slug: str, category: str) -> None:
     """Persist the pending goal so resume can find it after bot restart."""
     PENDING_SPEC_PATH.parent.mkdir(parents=True, exist_ok=True)
     PENDING_SPEC_PATH.write_text(
-        json.dumps({"goal": goal, "project_id": slug}), encoding="utf-8"
+        json.dumps({"goal": goal, "project_id": slug, "category": category}),
+        encoding="utf-8",
     )
 
 
@@ -248,13 +348,14 @@ def _set_registry_blocked(slug: str) -> None:
 
 
 def start_new_project(token: str, chat_id: str, raw_text: str) -> None:
-    """Show spec menu, save pending goal, set blocked_waiting_for_user."""
+    """Show dynamic spec menu based on project type, save pending goal."""
     slug = _slugify(raw_text)
-    _save_pending_spec(raw_text, slug)
+    category = detect_category(raw_text)
+    menu = generate_spec_menu(raw_text)
+    _save_pending_spec(raw_text, slug, category)
     _set_registry_blocked(slug)
-    log.info("telegram_bot.spec_requested", project_id=slug)
-    _reply(token, chat_id,
-           f"⚙️ Got it! Specs for *{slug}*:\n\n{SPEC_MENU}")
+    log.info("telegram_bot.spec_requested", project_id=slug, category=category)
+    _reply(token, chat_id, f"⚙️ Got it! Specs for *{slug}*:\n\n{menu}")
 
 
 # ---------------------------------------------------------------------------

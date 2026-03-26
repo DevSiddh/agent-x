@@ -11,6 +11,8 @@ from phase3.telegram_bot import (
     _slugify,
     apply_universal_template,
     parse_spec_reply,
+    detect_category,
+    generate_spec_menu,
     get_blocked_project,
     handle_text,
     handle_document,
@@ -36,21 +38,63 @@ class TestSlugify:
         assert _slugify("!!!") == "project"
 
 
+class TestDetectCategory:
+    def test_fastapi_is_web_api(self):
+        assert detect_category("build a fastapi backend") == "web_api"
+
+    def test_cli_detected(self):
+        assert detect_category("build a CLI tool for file processing") == "cli"
+
+    def test_data_detected(self):
+        assert detect_category("build a csv data pipeline") == "data"
+
+    def test_bot_detected(self):
+        assert detect_category("build a telegram bot") == "bot"
+
+    def test_frontend_detected(self):
+        assert detect_category("build a streamlit dashboard") == "frontend"
+
+    def test_unknown_falls_back_to_general(self):
+        assert detect_category("do something cool") == "general"
+
+
+class TestGenerateSpecMenu:
+    def test_web_api_has_auth_question(self):
+        menu = generate_spec_menu("build a fastapi backend")
+        assert "Auth" in menu or "auth" in menu.lower()
+
+    def test_cli_has_input_question(self):
+        menu = generate_spec_menu("build a CLI script")
+        assert "Input" in menu or "input" in menu.lower()
+
+    def test_data_has_data_source_question(self):
+        menu = generate_spec_menu("build a csv data pipeline")
+        assert "source" in menu.lower() or "Data" in menu
+
+    def test_general_fallback(self):
+        menu = generate_spec_menu("do something cool")
+        assert "1️⃣" in menu
+
+
 class TestParseSpecReply:
-    def test_standard_choices(self):
-        out = parse_spec_reply("1a, 2a, 3c")
-        assert "New project from scratch" in out
+    def test_web_api_choices(self):
+        out = parse_spec_reply("1a, 2a, 3a", "web_api")
+        assert "New project" in out
         assert "SQLite" in out
-        assert "No auth" in out
+        assert "JWT" in out
+
+    def test_cli_choices(self):
+        out = parse_spec_reply("1a, 2b, 3a", "cli")
+        assert "File input" in out
+        assert "Print output" in out
 
     def test_other_with_free_text(self):
-        out = parse_spec_reply("1a, 2e Redis, 3d OAuth2")
-        assert "New project from scratch" in out
+        out = parse_spec_reply("1a, 2e Redis, 3d OAuth2", "web_api")
         assert "Redis" in out
         assert "OAuth2" in out
 
     def test_none_skipped(self):
-        out = parse_spec_reply("1a, 2d, 3c, none")
+        out = parse_spec_reply("1a, 2a, 3c, none", "web_api")
         assert "none" not in out.lower()
 
     def test_fully_free_text_passes_through(self):
@@ -58,12 +102,11 @@ class TestParseSpecReply:
         assert "just build it with postgres and jwt" in out
 
     def test_empty_returns_original(self):
-        out = parse_spec_reply("")
-        assert out == ""
+        assert parse_spec_reply("") == ""
 
     def test_mixed_structured_and_free(self):
-        out = parse_spec_reply("1a, 2b, 3c, add rate limiting and caching")
-        assert "New project from scratch" in out
+        out = parse_spec_reply("1a, 2b, 3c, add rate limiting", "web_api")
+        assert "New project" in out
         assert "rate limiting" in out
 
 
@@ -105,9 +148,9 @@ class TestGetBlockedProject:
 class TestPendingSpec:
     def test_save_and_load(self, tmp_path, monkeypatch):
         monkeypatch.setattr("phase3.telegram_bot.PENDING_SPEC_PATH", tmp_path / "pending.json")
-        _save_pending_spec("build a bot", "build_a_bot")
+        _save_pending_spec("build a bot", "build_a_bot", "bot")
         result = _load_pending_spec()
-        assert result == {"goal": "build a bot", "project_id": "build_a_bot"}
+        assert result == {"goal": "build a bot", "project_id": "build_a_bot", "category": "bot"}
 
     def test_load_returns_none_when_missing(self, tmp_path, monkeypatch):
         monkeypatch.setattr("phase3.telegram_bot.PENDING_SPEC_PATH", tmp_path / "none.json")
@@ -163,7 +206,7 @@ class TestResumeProject:
     def test_spec_reply_creates_brief_yaml(self, tmp_path, monkeypatch):
         """When pending spec exists, reply combines goal+specs → creates brief.yaml."""
         pending_path = tmp_path / "pending.json"
-        pending_path.write_text(json.dumps({"goal": "build a bot", "project_id": "build_a_bot"}))
+        pending_path.write_text(json.dumps({"goal": "build a bot", "project_id": "build_a_bot", "category": "bot"}))
         monkeypatch.setattr("phase3.telegram_bot.PENDING_SPEC_PATH", pending_path)
         monkeypatch.setattr("phase3.telegram_bot.INTAKE_DIR", tmp_path)
 
@@ -180,7 +223,7 @@ class TestResumeProject:
 
     def test_spec_reply_sends_confirmation(self, tmp_path, monkeypatch):
         pending_path = tmp_path / "pending.json"
-        pending_path.write_text(json.dumps({"goal": "build a bot", "project_id": "build_a_bot"}))
+        pending_path.write_text(json.dumps({"goal": "build a bot", "project_id": "build_a_bot", "category": "bot"}))
         monkeypatch.setattr("phase3.telegram_bot.PENDING_SPEC_PATH", pending_path)
         monkeypatch.setattr("phase3.telegram_bot.INTAKE_DIR", tmp_path)
 
