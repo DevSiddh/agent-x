@@ -45,15 +45,16 @@ def _mock_rag(
 ) -> list[tuple[dict, float]]:
     """Return a single-entry RAG result list suitable for mocking find_for_rag."""
     return [
-        (
-            {
+        {
+            "score": score,
+            "tag": "[HIGH RELEVANCE]" if score >= 0.55 else "[LOW RELEVANCE]",
+            "metadata": {
                 "patch_applied": patch,
                 "decision": "accepted",
                 "retries_used": 0,
                 "bug_signature": "synthetic:DependencyError:pkg:requirements.txt",
             },
-            score,
-        )
+        }
     ]
 
 
@@ -161,10 +162,11 @@ class TestRAGRetrieval:
         # MemoryEngine._TOP_K=3, but mock returns 5 → build_context shows what's returned
         # Since find_for_rag itself caps at _TOP_K, mock 5 to verify caller handles it
         five_entries = [
-            (
-                {"patch_applied": f"+fix{i}", "decision": "accepted", "retries_used": i},
-                0.80,
-            )
+            {
+                "score": 0.80,
+                "tag": "[HIGH RELEVANCE]",
+                "metadata": {"patch_applied": f"+fix{i}", "decision": "accepted", "retries_used": i},
+            }
             for i in range(5)
         ]
         with patch(
@@ -193,10 +195,10 @@ class TestRAGRetrieval:
         assert "[HIGH RELEVANCE: Adapt this pattern]" in ctx
 
     def test_low_relevance_tag_present(self) -> None:
-        # score=0.60 → in [0.55, 0.70) → LOW RELEVANCE tag
+        # score=0.40 → below HIGH threshold (0.55) → LOW RELEVANCE tag
         with patch(
             "phase2.context_builder.MemoryEngine.find_for_rag",
-            return_value=_mock_rag(score=0.60),
+            return_value=_mock_rag(score=0.40),
         ):
             ctx = build_context(_dep_result(), _fixture_path())
         assert "[LOW RELEVANCE: Loose inspiration only. DO NOT copy directly.]" in ctx
@@ -204,7 +206,7 @@ class TestRAGRetrieval:
     def test_do_not_copy_in_low_relevance_tag(self) -> None:
         with patch(
             "phase2.context_builder.MemoryEngine.find_for_rag",
-            return_value=_mock_rag(score=0.60),
+            return_value=_mock_rag(score=0.40),
         ):
             ctx = build_context(_dep_result(), _fixture_path())
         assert "DO NOT copy directly" in ctx

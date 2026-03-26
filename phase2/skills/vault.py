@@ -71,37 +71,30 @@ class SkillVault:
         return entries
 
     def _get_embedding(self, text: str) -> list[float]:
-        """Embed text via Jina model. Returns [] on failure."""
-        try:
-            from phase2.memory.similarity import _get_embedding_model
-            model = _get_embedding_model()
-            if model is None:
-                return []
-            vec = model.encode([text])[0]
-            return vec.tolist()
-        except Exception as exc:
-            log.warning("skill_vault.embed_error", error=str(exc))
-            return []
+        """BM25 doesn't use embeddings — returns [] always. Kept for interface compat."""
+        return []
 
     def find_relevant(self, goal: str, k: int = 10) -> list[SkillEntry]:
         """
-        Embed goal, compute cosine similarity against all skills.
-        Returns top-k by similarity.
-        Falls back to returning all skills up to k if model unavailable.
+        BM25 keyword search over skill constraint_text + domain_tags.
+        Zero RAM, zero API calls. Falls back to returning all skills if BM25 fails.
         """
         entries = self._load_all()
         if not entries:
             return []
-        goal_vec = self._get_embedding(goal)
-        if not goal_vec:
-            # Model unavailable — return all up to k
+        try:
+            from rank_bm25 import BM25Okapi
+            import re as _re
+            def _tok(t: str) -> list[str]:
+                return [x for x in _re.split(r"[^a-z0-9]+", t.lower()) if x]
+            corpus = [_tok(f"{e.constraint_text} {' '.join(e.domain_tags)}") for e in entries]
+            bm25 = BM25Okapi(corpus)
+            scores = bm25.get_scores(_tok(goal))
+            ranked = sorted(zip(entries, scores), key=lambda x: x[1], reverse=True)
+            return [e for e, _ in ranked[:k]]
+        except Exception as exc:
+            log.warning("skill_vault.bm25_error", error=str(exc))
             return entries[:k]
-        scored = [
-            (e, _cosine(goal_vec, e.embedding) if e.embedding else 0.0)
-            for e in entries
-        ]
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return [e for e, _ in scored[:k]]
 
     def sample_top(self, skills: list[SkillEntry], n: int = 3) -> list[SkillEntry]:
         """
@@ -136,10 +129,9 @@ class SkillVault:
         Init Thompson arm. Never raises.
         """
         try:
-            if not entry.embedding:
-                entry = entry.model_copy(
-                    update={"embedding": self._get_embedding(entry.constraint_text)}
-                )
+            # BM25 mode — no embeddings needed, clear any stale vectors
+            if entry.embedding:
+                entry = entry.model_copy(update={"embedding": []})
             if not entry.created_at:
                 entry = entry.model_copy(
                     update={"created_at": datetime.now(timezone.utc).date().isoformat()}

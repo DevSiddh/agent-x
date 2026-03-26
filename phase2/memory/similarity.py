@@ -1,33 +1,33 @@
 """
-phase2/memory/similarity.py — Triple-hybrid semantic search engine.
+phase2/memory/similarity.py — BM25 + TF-IDF + Thompson hybrid search.
+
+Jina/SentenceTransformers REMOVED — was 800MB RAM on a 2GB VPS (OOM risk).
+Replaced with rank_bm25 (BM25) — <10MB RAM, zero API calls, zero cost.
 
 find_similar()  : reuse bypass (pipeline.py stage 4.5) — return format unchanged
-find_for_rag()  : RAG injection (context_builder.py stage 5) — NEW method
-Hybrid          : 0.30 × TF-IDF + 0.45 × Jina-dense + 0.25 × Thompson
-Fallback        : when Jina unavailable → weights redistribute to TF-IDF + Thompson only
+find_for_rag()  : RAG injection (context_builder.py stage 5)
+Hybrid          : 0.50 × BM25 + 0.25 × TF-IDF + 0.25 × Thompson
 """
 
 import json
+import math
+import re
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import structlog
 
 log = structlog.get_logger()
 
 # ── Thresholds & weights ─────────────────────────────────────────────────────
-_SIMILARITY_THRESHOLD = 0.85   # reuse bypass threshold — unchanged (pipeline.py)
-_RAG_HIGH_THRESHOLD   = 0.70   # [HIGH RELEVANCE] tag in context injection
-_RAG_LOW_THRESHOLD    = 0.55   # [LOW RELEVANCE] tag — below = no injection
-_TOP_K                = 3      # max entries injected per find_for_rag() call
+_SIMILARITY_THRESHOLD = 0.45   # BM25 scores are relative — single-entry corpus scores ~0.5
+_RAG_HIGH_THRESHOLD   = 0.55
+_RAG_LOW_THRESHOLD    = 0.35
+_TOP_K                = 3
 
-_W_TFIDF    = 0.30
-_W_DENSE    = 0.45
+_W_BM25     = 0.50
+_W_TFIDF    = 0.25
 _W_THOMPSON = 0.25
-
-# Module-level Jina model cache — populated by _get_embedding_model()
-_MODEL = None  # type: ignore[assignment]
 
 
 # ── Path helpers ─────────────────────────────────────────────────────────────
@@ -43,7 +43,6 @@ def _thompson_state_path() -> Path:
 # ── Thompson helpers ─────────────────────────────────────────────────────────
 
 def _load_thompson_state() -> dict:
-    """Load Thompson state — returns empty dict if missing/corrupt."""
     path = _thompson_state_path()
     if not path.exists():
         return {}
@@ -55,64 +54,74 @@ def _load_thompson_state() -> dict:
 
 
 def _thompson_success_rate(bug_signature: str, state: dict) -> float:
-    """alpha / (alpha + beta) for this arm, or 0.5 if not found."""
     arm = state.get(bug_signature)
     if arm is None:
         return 0.5
     alpha = arm.get("alpha", 1)
-    beta = arm.get("beta", 1)
+    beta  = arm.get("beta", 1)
     total = alpha + beta
     return alpha / total if total > 0 else 0.5
 
 
-# ── Jina helpers ─────────────────────────────────────────────────────────────
+# ── Tokeniser (shared by BM25 + TF-IDF) ─────────────────────────────────────
 
-def _thaw(category: str, matched_pattern: str, keyword: str, affected_file: str) -> str:
-    """Convert structured bug fields into natural language for Jina embedding.
+def _tokenise(text: str) -> list[str]:
+    """Split on non-alphanumeric chars, lowercase. Fast, no deps."""
+    return [t for t in re.split(r"[^a-z0-9]+", text.lower()) if t]
 
-    Example:
-        _thaw("DependencyError", "ModuleNotFoundError", "pkg_resources", "requirements.txt")
-        → "DependencyError (ModuleNotFoundError) involving pkg_resources in file requirements.txt"
+
+# ── BM25 scorer ──────────────────────────────────────────────────────────────
+
+def _bm25_scores(query: str, corpus: list[str]) -> list[float]:
     """
-    return (
-        f"{category} ({matched_pattern}) "
-        f"involving {keyword} in file {affected_file}"
-    )
-
-
-def _get_embedding_model():  # → SentenceTransformer | None
-    """Lazy-load Jina model — cached at module level after first call. Never raises."""
-    global _MODEL
-    if _MODEL is not None:
-        return _MODEL
+    Pure-Python BM25 (rank_bm25.BM25Okapi). <10MB RAM. Never raises.
+    Returns list of floats same length as corpus, normalised to [0,1].
+    """
+    if not corpus:
+        return []
     try:
-        from sentence_transformers import SentenceTransformer
-        _MODEL = SentenceTransformer(
-            "jinaai/jina-embeddings-v2-small-code", trust_remote_code=True
-        )
-        return _MODEL
+        from rank_bm25 import BM25Okapi
+        tokenised = [_tokenise(doc) for doc in corpus]
+        bm25 = BM25Okapi(tokenised)
+        scores = bm25.get_scores(_tokenise(query))
+        # Clip negatives, normalise to [0,1]
+        scores = [max(0.0, float(s)) for s in scores]
+        max_s = max(scores) if max(scores) > 0 else 1.0
+        return [s / max_s for s in scores]
     except Exception as exc:
-        log.warning("similarity.jina_unavailable", error=str(exc))
-        return None
+        log.warning("similarity.bm25_error", error=str(exc))
+        return [0.0] * len(corpus)
+
+
+# ── TF-IDF scorer (char ngram fallback / second layer) ───────────────────────
+
+def _tfidf_scores(query: str, corpus: list[str]) -> list[float]:
+    """sklearn TF-IDF char_wb ngram(2,4). Returns list normalised [0,1]."""
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+        vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4))
+        matrix = vec.fit_transform(corpus + [query])
+        scores = cos_sim(matrix[-1], matrix[:-1])[0].tolist()
+        return [float(s) for s in scores]
+    except Exception as exc:
+        log.warning("similarity.tfidf_error", error=str(exc))
+        return [0.0] * len(corpus)
 
 
 # ── MemoryEngine ─────────────────────────────────────────────────────────────
 
 class MemoryEngine:
     """
-    Triple-hybrid semantic search over accepted memory entries.
-
-    Hybrid score = 0.30 × TF-IDF + 0.45 × Jina-dense + 0.25 × Thompson
-    When Jina is unavailable, weights redistribute:
-        hybrid = (0.30/0.55) × TF-IDF + (0.25/0.55) × Thompson
+    BM25 + TF-IDF + Thompson hybrid search over accepted memory entries.
+    Hybrid score = 0.50 × BM25 + 0.25 × TF-IDF + 0.25 × Thompson
+    Zero neural networks. Zero API calls. ~10MB RAM.
     """
 
     def _load_successful(self) -> list[dict]:
-        """Load all accepted entries from memory.jsonl."""
         path = _memory_path()
         if not path.exists():
             return []
-
         entries: list[dict] = []
         try:
             with open(path, encoding="utf-8") as f:
@@ -128,7 +137,6 @@ class MemoryEngine:
                         continue
         except Exception as exc:
             log.error("similarity.load_error", error=str(exc))
-
         return entries
 
     def _score_entries(
@@ -141,212 +149,146 @@ class MemoryEngine:
         affected_file: str,
     ) -> list[tuple[dict, float, float, float]]:
         """
-        Score all entries. Returns list of (entry, hybrid_score, s_tfidf, s_dense).
-        Used by both find_similar() and find_for_rag().
-
-        TF-IDF : over raw bug_signature strings (char_wb, ngram 2-4)
-        Dense  : over thawed strings via Jina model
-        Hybrid : _W_TFIDF×s_tfidf + _W_DENSE×s_dense + _W_THOMPSON×thompson_rate
-        Boost  : +0.05 if affected_file in entry bug_signature
-
-        If Jina unavailable → s_dense=0.0, weights auto-redistribute:
-            hybrid = (0.30/(0.30+0.25))×s_tfidf + (0.25/(0.30+0.25))×thompson_rate
+        Score all entries.
+        Returns list of (entry, hybrid_score, s_bm25, s_tfidf).
+        query = full natural-language string for BM25
         """
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-
         if not entries:
             return []
 
-        # ── TF-IDF over raw bug_signature strings ─────────────────────────
-        corpus = [e.get("bug_signature", "") for e in entries]
-        try:
-            vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4))
-            all_texts = corpus + [query_sig]
-            tfidf_matrix = vectorizer.fit_transform(all_texts)
-            query_vec = tfidf_matrix[-1]
-            corpus_vecs = tfidf_matrix[:-1]
-            tfidf_scores: list[float] = cosine_similarity(query_vec, corpus_vecs)[0].tolist()
-        except Exception as exc:
-            log.error("similarity.tfidf_error", error=str(exc))
-            tfidf_scores = [0.0] * len(entries)
+        # Build query string — natural language for BM25
+        query = f"{category} {matched_pattern} {keyword} {affected_file} {query_sig}"
 
-        # ── Jina dense over thawed strings ────────────────────────────────
-        model = _get_embedding_model()
-        dense_scores: list[float] = [0.0] * len(entries)
-        if model is not None:
-            try:
-                query_thawed = _thaw(category, matched_pattern, keyword, affected_file)
-                corpus_thawed: list[str] = []
-                for e in entries:
-                    parts = e.get("bug_signature", ":::").split(":", 3)
-                    e_cat = parts[1] if len(parts) > 1 else category
-                    e_kw  = parts[2] if len(parts) > 2 else keyword
-                    e_af  = parts[3] if len(parts) > 3 else affected_file
-                    # matched_pattern not stored in memory — use keyword as proxy
-                    corpus_thawed.append(_thaw(e_cat, e_kw, e_kw, e_af))
+        # Build corpus — combine bug_signature + patch_applied snippet
+        corpus = []
+        for e in entries:
+            sig = e.get("bug_signature", "")
+            patch_snippet = (e.get("patch_applied") or "")[:200]
+            corpus.append(f"{sig} {patch_snippet}")
 
-                q_emb = model.encode([query_thawed], normalize_embeddings=True)
-                c_embs = model.encode(corpus_thawed, normalize_embeddings=True)
-                dense_scores = cosine_similarity(q_emb, c_embs)[0].tolist()
-            except Exception as exc:
-                log.warning("similarity.dense_error", error=str(exc))
-
-        # ── Hybrid scoring ────────────────────────────────────────────────
+        bm25   = _bm25_scores(query, corpus)
+        tfidf  = _tfidf_scores(query_sig, [e.get("bug_signature", "") for e in entries])
         thompson_state = _load_thompson_state()
+
         results: list[tuple[dict, float, float, float]] = []
-
         for i, entry in enumerate(entries):
-            s_tfidf = float(tfidf_scores[i])
-            s_dense = float(dense_scores[i])
-            ts_rate = _thompson_success_rate(entry.get("bug_signature", ""), thompson_state)
-
-            if model is not None:
-                hybrid = _W_TFIDF * s_tfidf + _W_DENSE * s_dense + _W_THOMPSON * ts_rate
-            else:
-                # Redistribute weights between TF-IDF and Thompson
-                w_tfidf = _W_TFIDF / (_W_TFIDF + _W_THOMPSON)
-                w_ts    = _W_THOMPSON / (_W_TFIDF + _W_THOMPSON)
-                hybrid  = w_tfidf * s_tfidf + w_ts * ts_rate
-
-            # Filename boost: +0.05 if affected_file appears in entry's bug_signature
-            if affected_file and affected_file in entry.get("bug_signature", ""):
-                hybrid += 0.05
-
-            results.append((entry, hybrid, s_tfidf, s_dense))
+            s_bm25   = bm25[i]
+            s_tfidf  = tfidf[i]
+            s_thompson = _thompson_success_rate(
+                entry.get("bug_signature", ""), thompson_state
+            )
+            # File match boost
+            boost = 0.05 if affected_file and affected_file in entry.get("bug_signature", "") else 0.0
+            hybrid = _W_BM25 * s_bm25 + _W_TFIDF * s_tfidf + _W_THOMPSON * s_thompson + boost
+            results.append((entry, min(hybrid, 1.0), s_bm25, s_tfidf))
 
         return results
 
     def find_similar(
         self,
-        bug_signature: str,
-        affected_file: str,
+        query_sig: str,
+        affected_file: str = "",
+        category: str = "",
+        matched_pattern: str = "",
+        keyword: str = "",
     ) -> dict | None:
         """
-        Reuse bypass — finds single best accepted entry above _SIMILARITY_THRESHOLD (0.85).
-        Called by pipeline.py stage 4.5. Return format UNCHANGED.
-
-        Returns:
-            dict with keys: patch, match_score, metadata — or None if no good match.
+        Reuse bypass — return best match above _SIMILARITY_THRESHOLD.
+        Return format unchanged from original (pipeline.py stage 4.5).
         """
         entries = self._load_successful()
         if not entries:
-            log.info("similarity.no_entries")
             return None
 
-        # Parse category and keyword from bug_signature for dense thawing.
-        # Format: repo:Category:keyword:file
-        parts = bug_signature.split(":", 3)
-        category = parts[1] if len(parts) > 1 else ""
-        keyword  = parts[2] if len(parts) > 2 else ""
-        # matched_pattern not available here — use keyword as fallback for thaw
-
         scored = self._score_entries(
-            entries,
-            query_sig=bug_signature,
-            category=category,
-            matched_pattern=keyword,
-            keyword=keyword,
-            affected_file=affected_file,
+            entries, query_sig, category, matched_pattern, keyword, affected_file
         )
         if not scored:
             return None
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        top_entry, top_score, _s_tfidf, _s_dense = scored[0]
+        best_entry, best_score, s_bm25, s_tfidf = max(scored, key=lambda x: x[1])
 
-        log.info(
-            "similarity.scored",
-            query=bug_signature,
-            top_score=round(top_score, 4),
-            threshold=_SIMILARITY_THRESHOLD,
-        )
-
-        if top_score < _SIMILARITY_THRESHOLD:
+        if best_score < _SIMILARITY_THRESHOLD:
+            log.info(
+                "similarity.no_match",
+                query=query_sig[:60],
+                best_score=round(best_score, 3),
+                threshold=_SIMILARITY_THRESHOLD,
+            )
             return None
 
+        log.info(
+            "similarity.match_found",
+            query=query_sig[:60],
+            match=best_entry.get("bug_signature", "")[:60],
+            score=round(best_score, 3),
+            bm25=round(s_bm25, 3),
+            tfidf=round(s_tfidf, 3),
+        )
         return {
-            "patch": top_entry.get("patch_applied", ""),
-            "match_score": round(top_score, 4),
-            "metadata": {
-                "bug_signature":  top_entry.get("bug_signature", ""),
-                "failure_category": top_entry.get("failure_category", ""),
-                "model_used":     top_entry.get("model_used", ""),
-                "repo":           top_entry.get("repo", ""),
-                "run_id":         top_entry.get("run_id", ""),
-            },
+            "patch": best_entry.get("patch_applied", ""),
+            "match_score": round(best_score, 3),
+            "metadata": best_entry,
         }
 
     def find_for_rag(
         self,
-        category: str,
-        matched_pattern: str,
-        keyword: str,
-        affected_file: str,
-        bug_signature: str,
-    ) -> list[tuple[dict, float]]:
+        query_sig: str,
+        affected_file: str = "",
+        category: str = "",
+        matched_pattern: str = "",
+        keyword: str = "",
+        top_k: int = _TOP_K,
+    ) -> list[dict]:
         """
-        RAG injection — returns up to _TOP_K accepted entries with scores >= _RAG_LOW_THRESHOLD.
-        Sorted by hybrid_score descending.
-        Logs Δ = s_dense - s_tfidf for monitoring.
-        Called by context_builder.py only. Never called by pipeline.py.
-
-        Returns:
-            list of (entry_dict, hybrid_score) — empty if nothing crosses 0.55.
+        RAG injection — return top_k entries above _RAG_LOW_THRESHOLD.
+        Each result tagged [HIGH RELEVANCE] or [LOW RELEVANCE].
         """
         entries = self._load_successful()
         if not entries:
             return []
 
         scored = self._score_entries(
-            entries,
-            query_sig=bug_signature,
-            category=category,
-            matched_pattern=matched_pattern,
-            keyword=keyword,
-            affected_file=affected_file,
+            entries, query_sig, category, matched_pattern, keyword, affected_file
         )
 
-        results: list[tuple[dict, float]] = []
-        for entry, hybrid, s_tfidf, s_dense in scored:
-            delta = s_dense - s_tfidf
-            log.info(
-                "similarity.rag_candidate",
-                score=round(hybrid, 4),
-                delta=round(delta, 4),
-                sig=entry.get("bug_signature", ""),
-            )
-            if hybrid >= _RAG_LOW_THRESHOLD:
-                results.append((entry, hybrid))
+        above = [(e, s, b, t) for e, s, b, t in scored if s >= _RAG_LOW_THRESHOLD]
+        above.sort(key=lambda x: x[1], reverse=True)
+        top = above[:top_k]
 
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results[:_TOP_K]
+        results = []
+        for entry, score, s_bm25, s_tfidf in top:
+            tag = "[HIGH RELEVANCE]" if score >= _RAG_HIGH_THRESHOLD else "[LOW RELEVANCE]"
+            results.append({
+                "patch": entry.get("patch_applied", ""),
+                "score": round(score, 3),
+                "tag": tag,
+                "metadata": entry,
+            })
 
+        log.info(
+            "similarity.rag_results",
+            query=query_sig[:60],
+            returned=len(results),
+            top_score=round(top[0][1], 3) if top else 0,
+        )
+        return results
 
-# ── Smoke test ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
     engine = MemoryEngine()
     result = engine.find_similar(
-        bug_signature="synthetic:DependencyError:pkg_resources:requirements.txt",
+        query_sig="synthetic:DependencyError:pkg_resources:requirements.txt",
         affected_file="requirements.txt",
-    )
-    if result:
-        print(
-            f"PASS  find_similar: score={result['match_score']} "
-            f"sig={result['metadata']['bug_signature']}"
-        )
-    else:
-        print("PASS  find_similar: no match (memory may be empty or below threshold)")
-
-    rag = engine.find_for_rag(
         category="DependencyError",
         matched_pattern="ModuleNotFoundError",
         keyword="pkg_resources",
-        affected_file="requirements.txt",
-        bug_signature="synthetic:DependencyError:pkg_resources:requirements.txt",
     )
-    print(f"PASS  find_for_rag: {len(rag)} entries returned")
+    print(f"find_similar: {result['match_score'] if result else 'no match'}")
+    rag = engine.find_for_rag(
+        query_sig="synthetic:DependencyError:pkg_resources:requirements.txt",
+        affected_file="requirements.txt",
+        category="DependencyError",
+    )
+    print(f"find_for_rag: {len(rag)} results")
     print("similarity.py smoke test PASSED")

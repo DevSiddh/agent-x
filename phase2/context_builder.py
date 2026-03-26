@@ -103,17 +103,19 @@ def build_context(
 
     # --- Section 3: Past similar fixes (triple-hybrid RAG) -----------------
     engine = MemoryEngine()
-    rag_results: list[tuple[dict, float]] = engine.find_for_rag(
+    rag_results = engine.find_for_rag(
+        query_sig=classifier_result.bug_signature,
         category=classifier_result.category,
         matched_pattern=classifier_result.matched_pattern,
         keyword=classifier_result.keyword,
         affected_file=classifier_result.affected_file,
-        bug_signature=classifier_result.bug_signature,
     )
 
     if rag_results:
         past_fixes: list[str] = []
-        for i, (entry_dict, score) in enumerate(rag_results, 1):
+        for i, result in enumerate(rag_results, 1):
+            entry_dict = result["metadata"]
+            score = result["score"]
             tag = _action_tag(score)
             patch_preview = (entry_dict.get("patch_applied") or "").strip()
             if len(patch_preview) > 500:
