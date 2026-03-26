@@ -405,10 +405,10 @@ class TestPipelineReuseBypass:
             "phase2.pipeline.apply_patch",
             lambda diff, path: ApplyResult(success=True, stdout="", stderr="", error=""),
         )
-        from phase2.executor.regression import TestReport
+        from phase2.executor.regression import PatchTestReport
         monkeypatch.setattr(
             "phase2.pipeline.run_tests",
-            lambda path: TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
+            lambda path: PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
         )
         monkeypatch.setattr("phase2.pipeline.check_regression", lambda b, a: False)
         monkeypatch.setattr("phase2.pipeline.rollback", lambda path: None)
@@ -458,10 +458,10 @@ class TestPipelineReuseBypass:
         monkeypatch.setattr("phase2.pipeline.apply_patch", _mock_apply)
         monkeypatch.setattr("phase2.pipeline.rollback", lambda path: None)
 
-        from phase2.executor.regression import TestReport
+        from phase2.executor.regression import PatchTestReport
         monkeypatch.setattr(
             "phase2.pipeline.run_tests",
-            lambda path: TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
+            lambda path: PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
         )
         monkeypatch.setattr("phase2.pipeline.check_regression", lambda b, a: False)
 

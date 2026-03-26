@@ -255,12 +255,12 @@ class TestPipelineIntegration:
                 pass
 
         from phase2.executor.runner import ApplyResult
-        from phase2.executor.regression import TestReport
+        from phase2.executor.regression import PatchTestReport
 
         mock_apply = MagicMock(
             return_value=ApplyResult(success=True, stdout="", stderr="", error="")
         )
-        report = TestReport(passed=True, failed_tests=[], total=1, exit_code=0, raw="")
+        report = PatchTestReport(passed=True, failed_tests=[], total=1, exit_code=0, raw="")
         mock_tests = MagicMock(return_value=report)
 
         # generate_patch is imported directly into pipeline — patch it there

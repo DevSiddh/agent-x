@@ -264,6 +264,11 @@ def rollback(fixture_path: Path) -> None:
     """
     fixture_path = Path(fixture_path).resolve()
     subprocess.run(
+        ["git", "reset", "HEAD", "--", "."],
+        cwd=fixture_path,
+        capture_output=True,
+    )
+    subprocess.run(
         ["git", "checkout", "--", "."],
         cwd=fixture_path,
         capture_output=True,
