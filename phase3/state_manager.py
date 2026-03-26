@@ -47,7 +47,9 @@ def save_state(state: SharedState) -> None:
     try:
         TEMP_PATH.parent.mkdir(parents=True, exist_ok=True)
         TEMP_PATH.write_text(state.model_dump_json(indent=2), encoding="utf-8")
-        TEMP_PATH.rename(STATE_PATH)
+        # Windows-safe atomic replace (os.replace is atomic on POSIX, near-atomic on Windows)
+        import os as _os
+        _os.replace(str(TEMP_PATH), str(STATE_PATH))
         log.info("state_manager.save.ok", project_id=state.project_id)
     except Exception as exc:
         log.error("state_manager.save.error", error=str(exc))
