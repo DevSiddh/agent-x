@@ -228,14 +228,14 @@ def write_file(
     """
     try:
         lines = content.splitlines()
-        if len(lines) > 50:
+        if len(lines) > 150:
             log.warning(
                 "executor.write_file.error",
                 file=str(file_path),
                 lines=len(lines),
-                reason="exceeds 50-line limit",
+                reason="exceeds 150-line limit",
             )
-            return RunResult(success=False, error="write_file: exceeds 50-line limit")
+            return RunResult(success=False, error="write_file: exceeds 150-line limit")
 
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")

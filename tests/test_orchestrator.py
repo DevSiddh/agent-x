@@ -89,19 +89,19 @@ class TestWriteFile:
         assert fp.exists()
         assert fp.read_text() == content
 
-    def test_exceeds_50_line_limit_returns_error(self, tmp_path):
+    def test_exceeds_150_line_limit_returns_error(self, tmp_path):
         repo = _make_git_repo(tmp_path)
         fp = repo / "big.py"
-        content = "\n".join([f"line {i}" for i in range(51)])
+        content = "\n".join([f"line {i}" for i in range(151)])
         result = write_file(fp, content, repo)
         assert not result.success
-        assert "50-line limit" in result.error
+        assert "150-line limit" in result.error
         assert not fp.exists()
 
-    def test_exactly_50_lines_passes(self, tmp_path):
+    def test_exactly_150_lines_passes(self, tmp_path):
         repo = _make_git_repo(tmp_path)
         fp = repo / "ok.py"
-        content = "\n".join([f"x = {i}" for i in range(50)])
+        content = "\n".join([f"x = {i}" for i in range(150)])
         result = write_file(fp, content, repo)
         assert result.success
 
