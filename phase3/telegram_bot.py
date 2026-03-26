@@ -261,6 +261,12 @@ def resume_project(token: str, chat_id: str, project_slug: str, user_reply: str)
             f"{original_goal}\n\nUser specs: {parsed_specs}"
         )
         _clear_pending_spec()
+        # Clear blocked status immediately so next message isn't routed here
+        try:
+            from phase3.project_context import update_registry_status
+            update_registry_status(project_slug, "active")
+        except Exception:
+            pass
         INTAKE_DIR.mkdir(parents=True, exist_ok=True)
         brief = {"project_id": project_slug, "goal": full_goal}
         (INTAKE_DIR / f"{project_slug}.yaml").write_text(yaml.dump(brief), encoding="utf-8")
