@@ -10,9 +10,10 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v4.1 IN PROGRESS — 576 tests passing
+## Current Status: v4.1 IN PROGRESS — 580 tests passing
 memory.jsonl: 513+ entries | registry.jsonl: LIVE (status updates wired) | skill_vault.jsonl: LIVE
-DeepSeek wired. Agent-Y plan_goal() integrated. registry status Q1 fixed. Loop complete.
+DeepSeek wired. plan_goal() integrated. rollback fix (staged files). TestReport rename fixed.
+Next: Q3 fix (.agent/context.md commit) + end-to-end test with real brief.yaml on VPS.
 
 ---
 
@@ -91,8 +92,9 @@ Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
 | session-2 | GAP-3 + M1 + M3 + M4 | DONE | 559 | 2026-03-26 |
 | session-3 | DeepSeek wired + plan_goal() + is_done fix | DONE | 576 | 2026-03-26 |
 | Q1 fix | registry status updates | DONE | 576 | 2026-03-26 |
+| bugfix session | rollback staged files + TestReport rename | DONE | 580 | 2026-03-26 |
 
 ## Last Test Run
 ```
-576 tests passing — 2026-03-26
+580 tests passing — 2026-03-26 (CI green, VPS verified)
 ```

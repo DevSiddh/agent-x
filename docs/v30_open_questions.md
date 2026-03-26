@@ -17,12 +17,9 @@
 - Fix: add git commit + push in orchestrator post-task flow
 - Gate: needs GITHUB_TOKEN in state or env — already available
 
-## Q4 — Orchestrator deepseek_call placeholder not implemented
-- write_file generates `# {file_str}` placeholder, not real DeepSeek content
-- Real impl needs AGENT_X_STATIC_PROMPT + DeepSeek call
-- Gate: core v4.1 work — this IS the v4.1 step
+## Q4 — Orchestrator deepseek_call placeholder not implemented ✅ FIXED 2026-03-26 (session-3)
+- _execute_file_ops now calls DeepSeek via _call_deepseek()
+- AGENT_X_STATIC_PROMPT + AcceptanceCriteria + hint wired
 
-## Q5 — hint field added to Task but not injected into Orchestrator prompt
-- Task.hint exists in schema but orchestrator never reads it
-- Fix: add hint injection in _execute_file_ops when building DeepSeek prompt
-- Gate: v4.1 — same session as Q4
+## Q5 — hint field not injected into Orchestrator prompt ✅ FIXED 2026-03-26 (session-3)
+- _build_agent_x_prompt() injects task.hint when set

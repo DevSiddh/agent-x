@@ -3,10 +3,10 @@
 
 ---
 
-## ⚡ v4.1 IN PROGRESS — Loop is wired, smoke test next
-# v3 FULLY CLOSED. DeepSeek wired. plan_goal() integrated. registry status fixed.
-# 576 tests passing. Next: end-to-end smoke test with real brief.yaml.
-# Drop brief.yaml in projects/new/ → watch it build.
+## ⚡ v4.1 IN PROGRESS — 580 tests, CI green, VPS verified
+# v3 FULLY CLOSED. DeepSeek wired. Rollback fix (staged files). TestReport rename fixed.
+# Next: Q3 fix (.agent/context.md commit to GitHub) + end-to-end test.
+# End-to-end test: drop brief.yaml → Agent-Y plans → Agent-X builds → tests pass → DONE.
 
 ## LIMITATIONS / OPEN QUESTIONS
 # docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
@@ -30,7 +30,9 @@
 | ✅ DONE | session-2 | GAP-3 + M1 + M3 + M4 | DONE — 2026-03-26 |
 | ✅ DONE | session-3 | DeepSeek + plan_goal() | DONE — 2026-03-26 |
 | ✅ DONE | Q1 fix | registry status | DONE — 2026-03-26 |
-| 1 — DO NOW | smoke test | drop brief.yaml → watch loop run | PENDING |
+| ✅ DONE | bugfix | rollback staged files + TestReport rename | DONE — 2026-03-26 |
+| 1 — DO NOW | Q3 fix | .agent/context.md commit to GitHub after task | PENDING |
+| 2 — THEN | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | PENDING |
 
 ---
 
