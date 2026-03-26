@@ -268,7 +268,8 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
 
 CREATION_SYSTEM_PROMPT = """You are a planning engine for an autonomous software engineer.
 Break a goal into 2-4 tasks MAX. Each task must:
-- Touch ≤ 3 files (files_to_touch max 3 items)
+- Touch EXACTLY 2 files: one test file (test_*.py) and one implementation file
+- NEVER create a task with 3 or more files
 - ALWAYS include BOTH the test file AND the implementation file in the same task
 - Have exactly 3 acceptance criteria cases: a Happy Path case, an Edge Case, and an Error Case
 - Be atomic and independently testable
@@ -276,10 +277,14 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - Use FLAT file structure — all files in project root, no src/ or tests/ subdirectories
 - Test file imports: use module name only, e.g. "from add import add" not "from src.add import add"
 - All inputs and expected values in acceptance criteria MUST be strings
-- Implementation files must contain REAL working code — not stubs, not string returns
-- For APIs: use FastAPI or Flask with real routes, not placeholder functions
+- CRITICAL: expected values must match EXACT Python return values. If a function returns None, expected="None". If it returns [], expected="[]". If it returns {"id":1}, expected='{"id":1}'.
+- NEVER use expected="success" or expected="Database created" — functions don't return prose strings
+- Implementation files must contain REAL working code — functions must RETURN the expected value
+- For APIs: define a plain function (NOT FastAPI route) named after the target_function. FastAPI routes are tested via httpx TestClient separately.
+- For FastAPI tests: test files MUST use "from fastapi.testclient import TestClient; from <module> import app; client = TestClient(app)" and call client.get/post/put/delete
 - For databases: use sqlite3 (stdlib) — do NOT use sqlalchemy
 - Available packages: fastapi, flask, httpx, pytest, pydantic. Use ONLY these + stdlib
+- target_function for FastAPI tasks: name it after the route function (e.g. "get_todos" for GET /todos)
 - Each file must be ≤ 150 lines
 - Group related functionality: all CRUD operations for one resource = ONE task, not 5
 
