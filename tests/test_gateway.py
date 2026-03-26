@@ -83,7 +83,7 @@ def test_pipeline_gateway_hit_skips_context_builder(monkeypatch, tmp_path):
     import phase2.memory.store as mem_store
     monkeypatch.setattr(mem_store, "_memory_path", lambda: tmp_path / "memory.jsonl")
 
-    from phase2.executor.regression import TestReport
+    from phase2.executor.regression import PatchTestReport
     from phase2.executor.runner import ApplyResult
     from phase2 import pipeline
 
@@ -92,7 +92,7 @@ def test_pipeline_gateway_hit_skips_context_builder(monkeypatch, tmp_path):
         patch_applied="appended pandas to requirements.txt",
         success=True,
     )
-    passing_report = TestReport(passed=True, total=5, failed_tests=[], exit_code=0, raw="5 passed")
+    passing_report = PatchTestReport(passed=True, total=5, failed_tests=[], exit_code=0, raw="5 passed")
 
     monkeypatch.setattr("phase2.gateway.check", lambda *a, **kw: gw_hit)
     monkeypatch.setattr("phase2.pipeline.run_tests", lambda *a, **kw: passing_report)
@@ -120,7 +120,7 @@ def test_pipeline_gateway_tests_fail_falls_through(monkeypatch, tmp_path):
     import phase2.memory.store as mem_store
     monkeypatch.setattr(mem_store, "_memory_path", lambda: tmp_path / "memory.jsonl")
 
-    from phase2.executor.regression import TestReport
+    from phase2.executor.regression import PatchTestReport
     from phase2 import pipeline
 
     gw_hit = GatewayResult(
@@ -128,8 +128,8 @@ def test_pipeline_gateway_tests_fail_falls_through(monkeypatch, tmp_path):
         patch_applied="appended pandas to requirements.txt",
         success=True,
     )
-    failing_report = TestReport(passed=False, total=5, failed_tests=["test_a"], exit_code=1, raw="1 failed")
-    passing_report = TestReport(passed=True, total=5, failed_tests=[], exit_code=0, raw="5 passed")
+    failing_report = PatchTestReport(passed=False, total=5, failed_tests=["test_a"], exit_code=1, raw="1 failed")
+    passing_report = PatchTestReport(passed=True, total=5, failed_tests=[], exit_code=0, raw="5 passed")
 
     call_count = {"run_tests": 0}
     def mock_run_tests(*a, **kw):

@@ -10,8 +10,8 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v3 FULLY CLOSED — 559 tests passing
-memory.jsonl: 406+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
+## Current Status: v3 FULLY CLOSED — 559 tests passing (all clean, no warnings)
+memory.jsonl: 513+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
 Next: v4.1 — Full autonomous loop (idea in → working repo out)
 
 ---

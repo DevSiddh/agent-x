@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from phase2.executor.runner import detect_runner, TestRunnerDetectionError
-from phase2.executor.regression import parse_report, run_tests, TestReport
+from phase2.executor.runner import detect_runner, RunnerDetectionError
+from phase2.executor.regression import parse_report, run_tests, PatchTestReport
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +75,8 @@ def test_detect_runner_walks_up_to_root(tmp_path: Path) -> None:
 
 
 def test_detect_runner_raises_when_no_manifest(tmp_path: Path) -> None:
-    """detect_runner raises TestRunnerDetectionError when no manifest found."""
-    with pytest.raises(TestRunnerDetectionError):
+    """detect_runner raises RunnerDetectionError when no manifest found."""
+    with pytest.raises(RunnerDetectionError):
         detect_runner(str(tmp_path), "script.rb")
 
 
@@ -149,7 +149,7 @@ def test_parse_report_malformed_json(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# run_tests — no runner returns TestReport with note="no_runner"
+# run_tests — no runner returns PatchTestReport with note="no_runner"
 # ---------------------------------------------------------------------------
 
 def test_run_tests_no_manifest_returns_no_runner_note(tmp_path: Path) -> None:

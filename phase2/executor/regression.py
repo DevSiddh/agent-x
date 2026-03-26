@@ -15,7 +15,7 @@ from pydantic import BaseModel
 log = structlog.get_logger()
 
 
-class TestReport(BaseModel):
+class PatchTestReport(BaseModel):
     passed: bool
     failed_tests: list[str]
     total: int
@@ -101,7 +101,7 @@ def get_complexity(file_path: Path) -> float | None:
         return None
 
 
-def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
+def run_tests(fixture_path: Path, affected_file: str = "") -> PatchTestReport:
     """
     Run the appropriate test suite on a fixture repo and return structured results.
     Detects runner from manifest files via detect_runner() (C3b).
@@ -111,17 +111,17 @@ def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
         affected_file: File that was patched — used to locate the manifest.
 
     Returns:
-        TestReport with passed, failed_tests, total, exit_code, raw output.
+        PatchTestReport with passed, failed_tests, total, exit_code, raw output.
     """
-    from phase2.executor.runner import TestRunnerDetectionError, detect_runner
+    from phase2.executor.runner import RunnerDetectionError, detect_runner
 
     fixture_path = Path(fixture_path).resolve()
 
     try:
         cmd, exec_root = detect_runner(str(fixture_path), affected_file or ".")
-    except TestRunnerDetectionError as exc:
+    except RunnerDetectionError as exc:
         log.warning("regression.no_runner", fixture=str(fixture_path), error=str(exc))
-        return TestReport(
+        return PatchTestReport(
             passed=False,
             failed_tests=[],
             total=0,
@@ -159,7 +159,7 @@ def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
         total=total,
     )
 
-    return TestReport(
+    return PatchTestReport(
         passed=passed,
         failed_tests=failed_tests,
         total=total,
@@ -168,7 +168,7 @@ def run_tests(fixture_path: Path, affected_file: str = "") -> TestReport:
     )
 
 
-def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
+def run_tests_stable(fixture_path: Path, runs: int = 3) -> PatchTestReport:
     """
     Run pytest runs times consecutively. Returns passed=True only if ALL runs pass.
     Any single failure → passed=False, note="flaky". (C1 — flaky fix prevention)
@@ -178,9 +178,9 @@ def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
         runs:         Number of consecutive passing runs required.
 
     Returns:
-        TestReport — note="flaky" if any run failed.
+        PatchTestReport — note="flaky" if any run failed.
     """
-    last_passing: TestReport | None = None
+    last_passing: PatchTestReport | None = None
     for i in range(runs):
         report = run_tests(fixture_path)
         if not report.passed:
@@ -190,7 +190,7 @@ def run_tests_stable(fixture_path: Path, runs: int = 3) -> TestReport:
                 run=i + 1,
                 of=runs,
             )
-            return TestReport(
+            return PatchTestReport(
                 passed=False,
                 failed_tests=report.failed_tests,
                 total=report.total,
@@ -305,13 +305,13 @@ def shadow_type_check(patched_file: Path) -> str:
         return ""
 
 
-def check_regression(before: TestReport, after: TestReport) -> bool:
+def check_regression(before: PatchTestReport, after: PatchTestReport) -> bool:
     """
     Detect if the patch introduced new test failures. (P7)
 
     Args:
-        before: TestReport from before patch was applied.
-        after:  TestReport from after patch was applied.
+        before: PatchTestReport from before patch was applied.
+        after:  PatchTestReport from after patch was applied.
 
     Returns:
         True if regression detected (new failures introduced), False otherwise.
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     print("PASS  check_regression: same reports = no regression")
 
     # Simulate regression
-    worse = TestReport(
+    worse = PatchTestReport(
         passed=False,
         failed_tests=["tests/test_basic.py::test_new_failure"],
         total=2,

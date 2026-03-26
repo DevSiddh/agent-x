@@ -85,9 +85,11 @@ def append_task(state: SharedState, task: Task, repo_path: Path) -> None:
         else:
             text += f"\n## Last Task\n{last_task_line}\n"
 
-        # Update Key Files
+        # Update Key Files — dedup: only add files not already listed
+        import re as _re
+        existing_files = set(_re.findall(r"`([^`]+)`", text))
         for f in task.files_to_touch:
-            if f not in text:
+            if f not in existing_files:
                 text = text.replace(
                     "## Key Files\n_None yet._",
                     f"## Key Files\n- `{f}`",
@@ -96,6 +98,7 @@ def append_task(state: SharedState, task: Task, repo_path: Path) -> None:
                     "## Key Files\n",
                     f"## Key Files\n- `{f}`\n",
                 )
+                existing_files.add(f)
 
         context_path.write_text(text, encoding="utf-8")
         log.info("project_context.appended", task_id=task.task_id, project=state.project_slug)

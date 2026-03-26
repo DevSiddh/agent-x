@@ -13,17 +13,17 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from phase2.executor.regression import TestReport, run_tests_stable
+from phase2.executor.regression import PatchTestReport, run_tests_stable
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _passing_report() -> TestReport:
-    return TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw="")
+def _passing_report() -> PatchTestReport:
+    return PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw="")
 
 
-def _failing_report() -> TestReport:
-    return TestReport(
+def _failing_report() -> PatchTestReport:
+    return PatchTestReport(
         passed=False,
         failed_tests=["tests/test_x.py::test_fail"],
         total=5,
@@ -47,7 +47,7 @@ class TestRunTestsStable:
     def test_first_run_fails_returns_flaky(self, monkeypatch: pytest.MonkeyPatch) -> None:
         call_count = 0
 
-        def _mock_run(path: Path) -> TestReport:
+        def _mock_run(path: Path) -> PatchTestReport:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -64,7 +64,7 @@ class TestRunTestsStable:
     def test_second_run_fails_returns_flaky(self, monkeypatch: pytest.MonkeyPatch) -> None:
         call_count = 0
 
-        def _mock_run(path: Path) -> TestReport:
+        def _mock_run(path: Path) -> PatchTestReport:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
@@ -81,7 +81,7 @@ class TestRunTestsStable:
     def test_runs_exactly_n_times_on_all_pass(self, monkeypatch: pytest.MonkeyPatch) -> None:
         call_count = 0
 
-        def _mock_run(path: Path) -> TestReport:
+        def _mock_run(path: Path) -> PatchTestReport:
             nonlocal call_count
             call_count += 1
             return _passing_report()
@@ -195,7 +195,7 @@ class TestStructuralEscalation:
         ))
         monkeypatch.setattr(
             "phase2.pipeline.run_tests",
-            lambda path: TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
+            lambda path: PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
         )
 
         entry = pipe.run("syn_001")
@@ -222,11 +222,11 @@ class TestStructuralEscalation:
         ))
         monkeypatch.setattr(
             "phase2.pipeline.run_tests",
-            lambda path: TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
+            lambda path: PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
         )
         monkeypatch.setattr(
             "phase2.pipeline.run_tests_stable",
-            lambda path: TestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
+            lambda path: PatchTestReport(passed=True, failed_tests=[], total=5, exit_code=0, raw=""),
         )
         monkeypatch.setattr(
             "phase2.pipeline.apply_patch",

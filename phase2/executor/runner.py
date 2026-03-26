@@ -21,7 +21,7 @@ log = structlog.get_logger()
 # Manifest-based runner detection (C3b)
 # ---------------------------------------------------------------------------
 
-class TestRunnerDetectionError(Exception):
+class RunnerDetectionError(Exception):
     """Raised when no test runner manifest is found in the fixture tree."""
 
 
@@ -86,7 +86,7 @@ def detect_runner(fixture_path: str, affected_file: str) -> tuple[list[str], Pat
         Tuple of (runner_command, execution_root_path).
 
     Raises:
-        TestRunnerDetectionError: No manifest found in the fixture tree.
+        RunnerDetectionError: No manifest found in the fixture tree.
     """
     fp = Path(fixture_path).resolve()
     af = Path(affected_file)
@@ -120,7 +120,7 @@ def detect_runner(fixture_path: str, affected_file: str) -> tuple[list[str], Pat
             break
         current = parent
 
-    raise TestRunnerDetectionError(
+    raise RunnerDetectionError(
         f"No test runner manifest found in {fp} (searched from {start_dir})"
     )
 

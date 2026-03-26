@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from phase2.executor.regression import TestReport, check_regression, run_tests
+from phase2.executor.regression import PatchTestReport, check_regression, run_tests
 from phase2.executor.runner import ApplyResult, apply_patch, rollback
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -104,7 +104,7 @@ class TestRunTests:
 
     def test_returns_test_report_model(self) -> None:
         report = run_tests(FIXTURE_SYN001)
-        assert isinstance(report, TestReport)
+        assert isinstance(report, PatchTestReport)
 
     def test_passed_on_clean_fixture(self) -> None:
         report = run_tests(FIXTURE_SYN001)
@@ -127,8 +127,8 @@ class TestRunTests:
 
 class TestCheckRegression:
 
-    def _report(self, failed: list[str]) -> TestReport:
-        return TestReport(
+    def _report(self, failed: list[str]) -> PatchTestReport:
+        return PatchTestReport(
             passed=len(failed) == 0,
             failed_tests=failed,
             total=len(failed) + 1,

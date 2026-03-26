@@ -133,9 +133,12 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
         log.warning("orchestrator.best_of_n_exhausted", task_id=task.task_id)
         state = mark_failed(state, task.task_id, "test_failure")
         state = _block_dependents(state, task.task_id)
-        # Skill vault: update loss
         if used_skill_ids:
             vault.update(used_skill_ids, won=False)
+        if state.github_repo and state.pr_number:
+            post_task_comment(repo=state.github_repo, pr_number=state.pr_number,
+                              task_id=task.task_id, description=task.description,
+                              status="failed")
         save_state(state)
         return state
 
@@ -158,9 +161,11 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     state = mark_completed(state, task.task_id)
     # 5. Atomic save
     save_state(state)
-    # 6. Append to .agent/context.md + update registry
+    # 6. Append to .agent/context.md + update registry + commit to GitHub
     append_task(state, task, repo_path)
     update_registry_last_task(state.project_slug, task.task_id)
+    if state.github_repo:
+        _commit_context(repo_path, task.task_id)
     # 7. Narrate task on PR (if PR is open)
     if state.github_repo and state.pr_number:
         post_task_comment(
@@ -184,6 +189,26 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
 
     log.info("orchestrator.task_completed", task_id=task.task_id)
     return state
+
+
+def _commit_context(repo_path: Path, task_id: str) -> None:
+    """Commit .agent/context.md to GitHub after task completion. Never raises."""
+    try:
+        context_file = repo_path / ".agent" / "context.md"
+        if not context_file.exists():
+            return
+        subprocess.run(["git", "add", str(context_file)],
+                       cwd=repo_path, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", f"[context] update after task {task_id}"],
+                       cwd=repo_path, check=True, capture_output=True)
+        subprocess.run(["git", "push"],
+                       cwd=repo_path, check=True, capture_output=True)
+        log.info("orchestrator.context_committed", task_id=task_id)
+    except subprocess.CalledProcessError as exc:
+        log.warning("orchestrator.context_commit_failed",
+                    task_id=task_id, error=exc.stderr.decode() if exc.stderr else str(exc))
+    except Exception as exc:
+        log.warning("orchestrator.context_commit_error", task_id=task_id, error=str(exc))
 
 
 def _execute_files(task: Task, repo_path: Path) -> None:

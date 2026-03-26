@@ -36,7 +36,7 @@ from phase1.log_fetcher.cleaner import clean_and_extract
 from phase2.classifier.regex_pass import ClassifierResult, classify, classify_with_fallback
 from phase2.classifier.safety_gate import check as gate_check
 from phase2.executor.regression import (
-    TestReport,
+    PatchTestReport,
     check_regression,
     extract_failing_test,
     run_tests,
@@ -241,7 +241,7 @@ def run(case_id: str) -> MemoryEntry:
         gw_result = gateway_check(cleaned, fixture_path)
         if gw_result and gw_result.success:
             log.info("gateway.hit", case_id=case_id, rule=gw_result.matched_rule)
-            gw_after: TestReport = run_tests(fixture_path)
+            gw_after: PatchTestReport = run_tests(fixture_path)
             if gw_after.passed:
                 outcome = outcome.model_copy(update={
                     "patch_applied": gw_result.patch_applied,
@@ -274,7 +274,7 @@ def run(case_id: str) -> MemoryEntry:
             rollback(fixture_path)
             reuse_result = apply_patch(cached["patch"], fixture_path)
             if reuse_result.success:
-                after_reuse: TestReport = run_tests(fixture_path)
+                after_reuse: PatchTestReport = run_tests(fixture_path)
                 if after_reuse.passed:
                     outcome = outcome.model_copy(update={
                         "patch_applied": cached["patch"],
@@ -333,7 +333,7 @@ def run(case_id: str) -> MemoryEntry:
                 return outcome
 
         # 6 — Run tests BEFORE patch (regression baseline)
-        before: TestReport = run_tests(fixture_path)
+        before: PatchTestReport = run_tests(fixture_path)
 
         # 7 — DeepSeekWorker (includes PostSafetyValidation + retry internally)
         worker_result = generate_patch(
@@ -445,7 +445,7 @@ def run(case_id: str) -> MemoryEntry:
             return outcome
 
         # 9 — RegressionCheck (multi-run stable: all 3 runs must pass)
-        after: TestReport = run_tests_stable(fixture_path)
+        after: PatchTestReport = run_tests_stable(fixture_path)
         if after.note == "flaky":
             rollback(fixture_path)
             log.warning("executor.flaky", case_id=case_id)
