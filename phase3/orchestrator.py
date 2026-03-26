@@ -169,11 +169,10 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     state = mark_completed(state, task.task_id)
     # 5. Atomic save
     save_state(state)
-    # 6. Append to .agent/context.md + update registry + commit to GitHub
+    # 6. Append to .agent/context.md + update registry + commit (push only if remote)
     append_task(state, task, repo_path)
     update_registry_last_task(state.project_slug, task.task_id)
-    if state.github_repo:
-        _commit_context(repo_path, task.task_id)
+    _commit_context(repo_path, task.task_id)
     # 7. Narrate task on PR (if PR is open)
     if state.github_repo and state.pr_number:
         post_task_comment(
@@ -200,7 +199,7 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
 
 
 def _commit_context(repo_path: Path, task_id: str) -> None:
-    """Commit .agent/context.md to GitHub after task completion. Never raises."""
+    """Commit .agent/context.md to local repo; push only if remote is configured. Never raises."""
     try:
         context_file = repo_path / ".agent" / "context.md"
         if not context_file.exists():
@@ -209,8 +208,12 @@ def _commit_context(repo_path: Path, task_id: str) -> None:
                        cwd=repo_path, check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", f"[context] update after task {task_id}"],
                        cwd=repo_path, check=True, capture_output=True)
-        subprocess.run(["git", "push"],
-                       cwd=repo_path, check=True, capture_output=True)
+        remote_check = subprocess.run(
+            ["git", "remote"], cwd=repo_path, capture_output=True, text=True
+        )
+        if remote_check.stdout.strip():
+            subprocess.run(["git", "push"],
+                           cwd=repo_path, check=True, capture_output=True)
         log.info("orchestrator.context_committed", task_id=task_id)
     except subprocess.CalledProcessError as exc:
         log.warning("orchestrator.context_commit_failed",

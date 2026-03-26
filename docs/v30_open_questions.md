@@ -11,11 +11,10 @@
 ## Q2 — post_task_comment not called on task FAILURE ✅ FIXED 2026-03-26 (session-2)
 - post_task_comment(status="failed") wired in best_of_n_exhausted path
 
-## Q3 — .agent/context.md not committed to GitHub after task
-- Orchestrator writes context locally but doesn't git commit + push it
-- CLAUDE.md spec: "Code + .agent/context.md committed together after every task"
-- Fix: add git commit + push in orchestrator post-task flow
-- Gate: needs GITHUB_TOKEN in state or env — already available
+## Q3 — .agent/context.md not committed to GitHub after task ✅ FIXED 2026-03-26
+- _commit_context() called unconditionally after every successful task (removed github_repo guard)
+- git add + commit always; push only if remote configured (git remote check)
+- 6 tests: TestCommitContext (commits/skips/no-raise/no-remote) + TestRunOnceCommitContext (always called)
 
 ## Q4 — Orchestrator deepseek_call placeholder not implemented ✅ FIXED 2026-03-26 (session-3)
 - _execute_file_ops now calls DeepSeek via _call_deepseek()

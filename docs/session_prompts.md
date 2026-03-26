@@ -31,7 +31,7 @@
 | ✅ DONE | session-3 | DeepSeek + plan_goal() | DONE — 2026-03-26 |
 | ✅ DONE | Q1 fix | registry status | DONE — 2026-03-26 |
 | ✅ DONE | bugfix | rollback staged files + TestReport rename | DONE — 2026-03-26 |
-| 1 — DO NOW | Q3 fix | .agent/context.md commit to GitHub after task | PENDING |
+| ✅ DONE | Q3 fix | .agent/context.md commit to GitHub after task | DONE — 2026-03-26 |
 | 2 — THEN | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | PENDING |
 
 ---

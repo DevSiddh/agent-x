@@ -4,7 +4,7 @@
 
 ---
 
-## Step Q3 — .agent/context.md committed to GitHub after task
+## Step Q3 — .agent/context.md committed to GitHub after task ✅ DONE 2026-03-26
 
 **Problem:** `_commit_context()` exists in orchestrator.py but is only called when
 `state.github_repo` is set. In the smoke test / local runs, github_repo is empty → never commits.

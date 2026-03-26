@@ -359,3 +359,104 @@ class TestRunLoop:
             result = run_loop("test", "build X", repo, max_iterations=10)
 
         assert is_done(result)
+
+
+# ---------------------------------------------------------------------------
+# _commit_context tests
+# ---------------------------------------------------------------------------
+
+class TestCommitContext:
+    def test_commits_context_file_when_exists(self, tmp_path):
+        """git add and commit are called; push called only when remote exists."""
+        from phase3.orchestrator import _commit_context
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "context.md").write_text("# context\n")
+
+        remote_result = MagicMock(returncode=0, stderr=b"", stdout="origin\n")
+        with patch("phase3.orchestrator.subprocess.run") as mock_run:
+            mock_run.return_value = remote_result
+            _commit_context(tmp_path, "T1")
+
+        cmds = [call.args[0] for call in mock_run.call_args_list]
+        assert any("add" in cmd for cmd in cmds)
+        assert any("commit" in cmd for cmd in cmds)
+        assert any("push" in cmd for cmd in cmds)
+
+    def test_push_skipped_when_no_remote(self, tmp_path):
+        """git add + commit happen but push is skipped when no remote configured."""
+        from phase3.orchestrator import _commit_context
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "context.md").write_text("# context\n")
+
+        no_remote = MagicMock(returncode=0, stderr=b"", stdout="")
+        with patch("phase3.orchestrator.subprocess.run") as mock_run:
+            mock_run.return_value = no_remote
+            _commit_context(tmp_path, "T1")
+
+        cmds = [call.args[0] for call in mock_run.call_args_list]
+        assert any("add" in cmd for cmd in cmds)
+        assert any("commit" in cmd for cmd in cmds)
+        assert not any("push" in cmd for cmd in cmds)
+
+    def test_skips_when_context_file_missing(self, tmp_path):
+        """No subprocess calls if .agent/context.md does not exist."""
+        from phase3.orchestrator import _commit_context
+        with patch("phase3.orchestrator.subprocess.run") as mock_run:
+            _commit_context(tmp_path, "T1")
+        mock_run.assert_not_called()
+
+    def test_does_not_raise_on_git_failure(self, tmp_path):
+        """CalledProcessError is caught — function must not propagate it."""
+        from phase3.orchestrator import _commit_context
+        agent_dir = tmp_path / ".agent"
+        agent_dir.mkdir()
+        (agent_dir / "context.md").write_text("# context\n")
+
+        with patch(
+            "phase3.orchestrator.subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "git", stderr=b"error"),
+        ):
+            _commit_context(tmp_path, "T1")  # must not raise
+
+
+class TestRunOnceCommitContext:
+    def test_commit_context_called_when_github_repo_set(self, tmp_path, monkeypatch):
+        """_commit_context is called exactly once on success when github_repo is set."""
+        import phase3.state_manager as sm
+        import phase3.project_context as pc
+        monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
+        monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
+
+        repo = _make_git_repo(tmp_path / "repo")
+        state = _make_state([_make_task(patch_order=[])])
+        state = state.model_copy(update={"github_repo": "owner/repo"})
+        os.environ["WORKSPACE_ROOT"] = str(tmp_path)
+
+        with patch("phase3.orchestrator._run_tests", return_value=True):
+            with patch("phase3.orchestrator._call_deepseek", return_value="def add(a,b): return a+b"):
+                with patch("phase3.orchestrator._commit_context") as mock_cc:
+                    run_once(state, repo)
+
+        mock_cc.assert_called_once()
+
+    def test_commit_context_always_called_on_success(self, tmp_path, monkeypatch):
+        """_commit_context is called even without github_repo (commits locally, skips push)."""
+        import phase3.state_manager as sm
+        import phase3.project_context as pc
+        monkeypatch.setattr(sm, "STATE_PATH", tmp_path / "state.json")
+        monkeypatch.setattr(sm, "TEMP_PATH", tmp_path / "state_tmp.json")
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
+
+        repo = _make_git_repo(tmp_path / "repo")
+        state = _make_state([_make_task(patch_order=[])])
+        os.environ["WORKSPACE_ROOT"] = str(tmp_path)
+
+        with patch("phase3.orchestrator._run_tests", return_value=True):
+            with patch("phase3.orchestrator._call_deepseek", return_value="def add(a,b): return a+b"):
+                with patch("phase3.orchestrator._commit_context") as mock_cc:
+                    run_once(state, repo)
+
+        mock_cc.assert_called_once()
