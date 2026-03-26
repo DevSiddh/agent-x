@@ -45,10 +45,9 @@ log = structlog.get_logger()
 
 AGENT_X_STATIC_PROMPT = (
     "You are Agent-X. Satisfy the Acceptance Criteria exactly. "
-    "Use FLAT file structure — no src/ or tests/ subdirectories. "
-    "All files live in the project root. "
-    "Import using the exact filename without path prefix: "
-    "e.g. if the file is main.py, import as `from main import add`. "
+    "Use FLAT file structure — all files in project root, no subdirectories. "
+    "For implementation files: define the function directly, no unnecessary imports. "
+    "For test files: the import line will be specified in the task — use it exactly. "
     "Hard limits: 50 lines per new file, 15 lines per edit. "
     "Return raw Python only. No markdown. No code fences. No explanation."
 )
@@ -247,11 +246,24 @@ def _build_agent_x_prompt(task: Task, file_str: str, action: TaskAction) -> str:
     )
     hint_section = f"\nHint: {task.hint}" if task.hint else ""
     action_verb = "Create" if action == TaskAction.WRITE_FILE else "Edit"
+
+    # Derive exact import line for test files; warn impl files not to import
+    impl_files = [f for f in task.patch_order if not Path(f).name.startswith("test_")]
+    import_hint = ""
+    if file_str.startswith("test_") and impl_files:
+        module_name = Path(impl_files[0]).stem
+        fn = task.acceptance_criteria.target_function
+        import_hint = f"\nImport line to use: from {module_name} import {fn}"
+    elif not file_str.startswith("test_"):
+        fn = task.acceptance_criteria.target_function
+        import_hint = f"\nThis is the implementation file. Define {fn}() directly. Do NOT import from main or any other module."
+
     return (
         f"Task: {action_verb} `{file_str}`\n"
         f"Description: {task.description}\n"
         f"Target function: {task.acceptance_criteria.target_function}\n"
         f"Acceptance criteria:\n{cases_text}"
+        f"{import_hint}"
         f"{hint_section}\n"
         f"File to {'create' if action == TaskAction.WRITE_FILE else 'edit'}: {file_str}"
     )
@@ -288,7 +300,11 @@ def _execute_file_ops(task: Task, repo_path: Path) -> bool:
     """Execute file operations for all files in patch_order. Returns True on success."""
     for file_str in task.patch_order:
         file_path = repo_path / file_str
-        action = TaskAction.WRITE_FILE if is_new_file(file_str, repo_path) else TaskAction.FILE_EDIT
+        # Trust the task's declared action; only fall back to FILE_EDIT if unspecified
+        if task.action in (TaskAction.WRITE_FILE, TaskAction.FILE_EDIT):
+            action = task.action
+        else:
+            action = TaskAction.WRITE_FILE if is_new_file(file_str, repo_path) else TaskAction.FILE_EDIT
 
         prompt = _build_agent_x_prompt(task, file_str, action)
         content = _strip_code_fences(_call_deepseek(prompt))
@@ -396,6 +412,13 @@ def run_loop(
             continue
     else:
         log.info("orchestrator.loop.max_iterations", max_iterations=max_iterations)
+
+    # Telegram notification on exit
+    from phase3.telegram_notify import notify_loop_done
+    completed = sum(1 for t in state.plan if t.status == "completed")
+    failed = sum(1 for t in state.plan if t.status == "failed")
+    blocked = sum(1 for t in state.plan if t.status == "blocked")
+    notify_loop_done(project_id, completed, failed, blocked)
 
     return state
 

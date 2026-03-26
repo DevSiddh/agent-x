@@ -94,8 +94,9 @@ Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
 | Q1 fix | registry status updates | DONE | 576 | 2026-03-26 |
 | bugfix session | rollback staged files + TestReport rename | DONE | 580 | 2026-03-26 |
 | Q3 fix | _commit_context() tests + Q3 marked done | DONE | 585 | 2026-03-26 |
+| yc0 fix | task.action trusted over is_new_file; test mock for plan_goal | DONE | 604 | 2026-03-26 |
 
 ## Last Test Run
 ```
-595 tests passing — 2026-03-26
+604 tests passing — 2026-03-26
 ```

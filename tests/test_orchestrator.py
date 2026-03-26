@@ -319,8 +319,9 @@ class TestRunLoop:
         repo = _make_git_repo(tmp_path / "repo")
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)
 
-        # Empty plan → loop breaks immediately (Agent-Y needed)
-        state = run_loop("test", "build X", repo, max_iterations=3)
+        # Empty plan → plan_goal is called; mock it to raise so loop exits with empty plan
+        with patch("phase3.orchestrator.plan_goal", side_effect=RuntimeError("no api")):
+            state = run_loop("test", "build X", repo, max_iterations=3)
         assert state.plan == []
 
     def test_agent_y_not_called_on_normal_progress(self, tmp_path, monkeypatch):
