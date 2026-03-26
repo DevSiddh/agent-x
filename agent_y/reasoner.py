@@ -277,6 +277,7 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - Use FLAT file structure — all files in project root, no src/ or tests/ subdirectories
 - Test file imports: use module name only, e.g. "from add import add" not "from src.add import add"
 - All inputs and expected values in acceptance criteria MUST be strings
+- target_function MUST be the implementation function name (e.g. "create_todo_table"), NEVER a test function name (never "test_*")
 - CRITICAL: inputs must be a single function call on ONE line: ["add(1, 2)"] not multi-step code
 - CRITICAL: expected must be the EXACT Python return value as string: "3", "[]", "None", '{"id":1}'
 - NEVER use expected="success" or expected="created" — only actual return values

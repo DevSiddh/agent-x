@@ -256,10 +256,20 @@ def _build_agent_x_prompt(task: Task, file_str: str, action: TaskAction) -> str:
     if file_str.startswith("test_") and impl_files:
         module_name = Path(impl_files[0]).stem
         fn = task.acceptance_criteria.target_function
-        import_hint = f"\nImport line to use: from {module_name} import {fn}"
+        # Strip test_ prefix if target_function is a test name not an impl name
+        impl_fn = fn[5:] if fn.startswith("test_") else fn
+        # For FastAPI TestClient tests, use app import not function import
+        if any(kw in fn.lower() for kw in ("endpoint", "route", "api", "client")):
+            import_hint = (
+                f"\nFor this test file: from fastapi.testclient import TestClient; "
+                f"from {module_name} import app; client = TestClient(app)"
+            )
+        else:
+            import_hint = f"\nImport line to use: from {module_name} import {impl_fn}"
     elif not file_str.startswith("test_"):
         fn = task.acceptance_criteria.target_function
-        import_hint = f"\nThis is the implementation file. Define {fn}() directly. Do NOT import from main or any other module."
+        impl_fn = fn[5:] if fn.startswith("test_") else fn
+        import_hint = f"\nThis is the implementation file. Define {impl_fn}() directly. Do NOT import from main or any other module."
 
     return (
         f"Task: {action_verb} `{file_str}`\n"
