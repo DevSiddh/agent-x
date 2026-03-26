@@ -325,6 +325,12 @@ def handle_text(token: str, chat_id: str, text: str) -> None:
             _reply(token, chat_id, "Commands: /list  /delete slug [--hard]  /show slug")
         return
 
+    # Check pending_spec FIRST — avoids registry race condition
+    pending = _load_pending_spec()
+    if pending:
+        resume_project(token, chat_id, pending["project_id"], text)
+        return
+
     blocked = get_blocked_project()
     if blocked:
         resume_project(token, chat_id, blocked["project_slug"], text)
