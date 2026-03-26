@@ -30,9 +30,10 @@ User gives an idea → Agent-Y thinks, designs, architects, breaks into tasks
 → loop until done. CI/CD repair is just the first proving ground.
 Full vision → @docs/vision.md
 
-## Current Build Status (2026-03-26) — v4.1 NEXT
-559 tests passing — memory.jsonl 513+ entries — registry.jsonl LIVE — skill_vault.jsonl LIVE
-v3 FULLY CLOSED — Y-C0 + X-C0 + Y-C1 + v3.1 + v3.2 all DONE
+## Current Build Status (2026-03-26) — v4.1 IN PROGRESS
+576 tests passing — memory.jsonl 513+ entries — registry.jsonl LIVE — skill_vault.jsonl LIVE
+v3 FULLY CLOSED. DeepSeek wired. plan_goal() integrated. registry status fixed.
+Next: end-to-end smoke test — drop brief.yaml → idea in → working repo out.
 Full step history → @docs/progress.md
 
 ## Pipeline (strict order — do not change)

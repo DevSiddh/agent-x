@@ -152,6 +152,30 @@ def register_project(state: SharedState) -> None:
         log.error("registry.register_error", error=str(exc))
 
 
+def update_registry_status(project_slug: str, status: str) -> None:
+    """
+    Update status field for a project in registry.jsonl.
+    Valid statuses: active | completed | deleted | failed
+    Never raises.
+    """
+    try:
+        if not REGISTRY_PATH.exists():
+            return
+        lines = REGISTRY_PATH.read_text(encoding="utf-8").splitlines()
+        updated = []
+        for line in lines:
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            if entry.get("project_slug") == project_slug:
+                entry["status"] = status
+            updated.append(json.dumps(entry))
+        REGISTRY_PATH.write_text("\n".join(updated) + "\n", encoding="utf-8")
+        log.info("registry.status_updated", project=project_slug, status=status)
+    except Exception as exc:
+        log.error("registry.status_update_error", error=str(exc))
+
+
 def update_registry_last_task(project_slug: str, task_id: str) -> None:
     """Update last_task field for a project in registry.jsonl. Never raises."""
     try:

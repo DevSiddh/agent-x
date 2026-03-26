@@ -1,5 +1,5 @@
 # Agent-X | Progress Tracker
-# Last updated: 2026-03-25
+# Last updated: 2026-03-26
 # Full build history (v1–v2.3): docs/archive/progress_v1_v2.md
 
 ---
@@ -11,8 +11,8 @@ Full vision → @docs/vision.md
 ---
 
 ## Current Status: v4.1 IN PROGRESS — 576 tests passing
-memory.jsonl: 513+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
-DeepSeek wired into Orchestrator. Agent-Y plan_goal() integrated. Loop complete.
+memory.jsonl: 513+ entries | registry.jsonl: LIVE (status updates wired) | skill_vault.jsonl: LIVE
+DeepSeek wired. Agent-Y plan_goal() integrated. registry status Q1 fixed. Loop complete.
 
 ---
 
@@ -78,7 +78,21 @@ Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
 
 ---
 
+## Build History (v3–v4.1)
+
+| Version | Steps | Status | Tests | Date |
+|---------|-------|--------|-------|------|
+| v3.0.1 Y-C0 | schemas + plan_goal() + replan() | DONE | 493 | 2026-03-25 |
+| v3.0.2 X-C0 | write_file() + StateManager + Orchestrator | DONE | 517 | 2026-03-25 |
+| v3.0.3 Y-C1 | SkillVault + Best-of-N + Retrospective | DONE | 540 | 2026-03-25 |
+| v3.1 | .agent/context.md + registry.jsonl | DONE | 559 | 2026-03-25 |
+| v3.2 | Brief watcher + Streamlit + Telegram + PR | DONE | 559 | 2026-03-25 |
+| session-1 | BUG-1/2/3 fixes | DONE | 559 | 2026-03-26 |
+| session-2 | GAP-3 + M1 + M3 + M4 | DONE | 559 | 2026-03-26 |
+| session-3 | DeepSeek wired + plan_goal() + is_done fix | DONE | 576 | 2026-03-26 |
+| Q1 fix | registry status updates | DONE | 576 | 2026-03-26 |
+
 ## Last Test Run
 ```
-540 tests passing — 2026-03-26 (v3.0 COMPLETE)
+576 tests passing — 2026-03-26
 ```

@@ -30,7 +30,7 @@ from phase2.executor.runner import RunResult, apply_patch, rollback, write_file
 from phase2.tools.pr_creator import post_task_comment
 from phase2.skills.vault import SkillVault
 from phase2.tools.ast_mapper import map_repo
-from phase3.project_context import append_task, register_project, scaffold_context, update_registry_last_task
+from phase3.project_context import append_task, register_project, scaffold_context, update_registry_last_task, update_registry_status
 from phase3.state_manager import (
     get_next_pending_task,
     load_state,
@@ -354,6 +354,7 @@ def run_loop(
     for iteration in range(max_iterations):
         if is_done(state):
             log.info("orchestrator.loop.done", iterations=iteration)
+            update_registry_status(state.project_slug, "completed")
             break
 
         # Agent-Y: call plan_goal() when plan is empty

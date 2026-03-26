@@ -3,10 +3,10 @@
 
 ---
 
-## ⚡ v3 FULLY CLOSED — NEXT: v4.1 Full Autonomous Loop
-# v3.1 DONE — .agent/context.md per project + registry.jsonl
-# v3.2 DONE — brief watcher + Streamlit + Telegram + PR comments + webhook
-# 559 tests passing. Next: v4.1 — idea in → working repo out.
+## ⚡ v4.1 IN PROGRESS — Loop is wired, smoke test next
+# v3 FULLY CLOSED. DeepSeek wired. plan_goal() integrated. registry status fixed.
+# 576 tests passing. Next: end-to-end smoke test with real brief.yaml.
+# Drop brief.yaml in projects/new/ → watch it build.
 
 ## LIMITATIONS / OPEN QUESTIONS
 # docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
@@ -24,7 +24,13 @@
 | ✅ DONE | step Y-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
 | ✅ DONE | step X-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
 | ✅ DONE | step Y-C1 | v30_creation_steps.md | DONE — 2026-03-25 |
-| 1 — DO NOW | step v3.2 | docs/CLAUDE.md v3.2 section | PENDING |
+| ✅ DONE | step v3.1 | project context + registry | DONE — 2026-03-25 |
+| ✅ DONE | step v3.2 | interface layer | DONE — 2026-03-25 |
+| ✅ DONE | session-1 | BUG-1/2/3 | DONE — 2026-03-26 |
+| ✅ DONE | session-2 | GAP-3 + M1 + M3 + M4 | DONE — 2026-03-26 |
+| ✅ DONE | session-3 | DeepSeek + plan_goal() | DONE — 2026-03-26 |
+| ✅ DONE | Q1 fix | registry status | DONE — 2026-03-26 |
+| 1 — DO NOW | smoke test | drop brief.yaml → watch loop run | PENDING |
 
 ---
 

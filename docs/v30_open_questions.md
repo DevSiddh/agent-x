@@ -4,15 +4,12 @@
 
 ---
 
-## Q1 — registry.jsonl has no status update mechanism
-- Status stays "active" forever — no "completed" or "deleted" transition
-- Fix: add update_registry_status() to project_context.py
-- Gate: build when PROJECT DELETE (v3.2 Telegram /delete) is implemented
+## Q1 — registry.jsonl has no status update mechanism ✅ FIXED 2026-03-26
+- update_registry_status() added to project_context.py
+- Orchestrator calls it with "completed" when is_done() = True
 
-## Q2 — post_task_comment not called on task FAILURE
-- Success path narrates to PR. Failure path is silent.
-- Fix: call post_task_comment with status="failed" in mark_failed path
-- Gate: low priority — nice-to-have for v4.1
+## Q2 — post_task_comment not called on task FAILURE ✅ FIXED 2026-03-26 (session-2)
+- post_task_comment(status="failed") wired in best_of_n_exhausted path
 
 ## Q3 — .agent/context.md not committed to GitHub after task
 - Orchestrator writes context locally but doesn't git commit + push it

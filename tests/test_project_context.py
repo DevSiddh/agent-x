@@ -276,3 +276,24 @@ class TestOrchestratorContextWire:
             orch.run_loop("test", "build calc", repo, max_iterations=2)
 
         assert (tmp_path / "registry.jsonl").exists()
+
+
+class TestRegistryStatus:
+    def test_update_status_to_completed(self, tmp_path, monkeypatch):
+        import phase3.project_context as pc
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
+        from phase3.project_context import update_registry_status
+
+        state = _make_state("proj-x")
+        register_project(state)
+        update_registry_status("proj-x", "completed")
+
+        import json
+        entry = json.loads((tmp_path / "registry.jsonl").read_text().strip())
+        assert entry["status"] == "completed"
+
+    def test_update_status_nonexistent_does_not_raise(self, tmp_path, monkeypatch):
+        import phase3.project_context as pc
+        monkeypatch.setattr(pc, "REGISTRY_PATH", tmp_path / "registry.jsonl")
+        from phase3.project_context import update_registry_status
+        update_registry_status("ghost", "completed")  # should not raise
