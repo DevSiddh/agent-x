@@ -267,14 +267,25 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
 # ---------------------------------------------------------------------------
 
 CREATION_SYSTEM_PROMPT = """You are a planning engine for an autonomous software engineer.
-Break a goal into ordered tasks. Each task must:
+Break a goal into 2-4 tasks MAX. Each task must:
 - Touch ≤ 3 files (files_to_touch max 3 items)
+- ALWAYS include BOTH the test file AND the implementation file in the same task
 - Have exactly 3 acceptance criteria cases: a Happy Path case, an Edge Case, and an Error Case
 - Be atomic and independently testable
-- ALWAYS include a test file (test_<name>.py) as the FIRST item in patch_order
+- ALWAYS put test file (test_<name>.py) FIRST in patch_order, implementation file SECOND
 - Use FLAT file structure — all files in project root, no src/ or tests/ subdirectories
 - Test file imports: use module name only, e.g. "from add import add" not "from src.add import add"
 - All inputs and expected values in acceptance criteria MUST be strings
+- Implementation files must contain REAL working code — not stubs, not string returns
+- For APIs: use FastAPI or Flask with real routes, not placeholder functions
+- For databases: use real SQLite/SQLAlchemy queries, not mock returns
+- Group related functionality: all CRUD operations for one resource = ONE task, not 5
+
+PLAN SIZE RULES (strict):
+- Simple project (1 module): 1-2 tasks
+- Medium project (API + DB): 2-3 tasks
+- Complex project (API + DB + auth): 3-4 tasks
+- NEVER create one task per endpoint — group all endpoints for a resource into one task
 
 Output valid JSON only. Start with { and nothing else before it.
 
