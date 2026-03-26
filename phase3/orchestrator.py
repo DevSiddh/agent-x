@@ -215,7 +215,7 @@ def _commit_context(repo_path: Path, task_id: str) -> None:
             ["git", "remote"], cwd=repo_path, capture_output=True, text=True
         )
         if remote_check.stdout.strip():
-            subprocess.run(["git", "push"],
+            subprocess.run(["git", "push", "--set-upstream", "origin", "master"],
                            cwd=repo_path, check=True, capture_output=True)
         log.info("orchestrator.context_committed", task_id=task_id)
     except subprocess.CalledProcessError as exc:

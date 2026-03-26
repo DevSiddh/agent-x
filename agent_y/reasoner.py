@@ -278,7 +278,8 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - All inputs and expected values in acceptance criteria MUST be strings
 - Implementation files must contain REAL working code — not stubs, not string returns
 - For APIs: use FastAPI or Flask with real routes, not placeholder functions
-- For databases: use real SQLite/SQLAlchemy queries, not mock returns
+- For databases: use sqlite3 (stdlib) — do NOT use sqlalchemy
+- Available packages: fastapi, flask, httpx, pytest, pydantic. Use ONLY these + stdlib
 - Group related functionality: all CRUD operations for one resource = ONE task, not 5
 
 PLAN SIZE RULES (strict):
