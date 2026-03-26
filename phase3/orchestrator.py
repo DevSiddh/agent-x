@@ -19,6 +19,8 @@ try:
 except ImportError:
     OpenAI = None  # type: ignore
 
+from phase3.telegram_notify import notify_loop_done
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -414,7 +416,6 @@ def run_loop(
         log.info("orchestrator.loop.max_iterations", max_iterations=max_iterations)
 
     # Telegram notification on exit
-    from phase3.telegram_notify import notify_loop_done
     completed = sum(1 for t in state.plan if t.status == "completed")
     failed = sum(1 for t in state.plan if t.status == "failed")
     blocked = sum(1 for t in state.plan if t.status == "blocked")
