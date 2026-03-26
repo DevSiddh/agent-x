@@ -3,10 +3,10 @@
 
 ---
 
-## ⚡ v3 CLOSED — NEXT: v4.1 Full Autonomous Loop
-# v3.2 DONE — brief watcher + Streamlit progress + Telegram approve/reject + PR comments + webhook /approve /fix
-# v3 fully closed. 540 tests passing.
-# Next: v4.1 — idea in → working repo out.
+## ⚡ v3 FULLY CLOSED — NEXT: v4.1 Full Autonomous Loop
+# v3.1 DONE — .agent/context.md per project + registry.jsonl
+# v3.2 DONE — brief watcher + Streamlit + Telegram + PR comments + webhook
+# 559 tests passing. Next: v4.1 — idea in → working repo out.
 
 ## LIMITATIONS / OPEN QUESTIONS
 # docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
