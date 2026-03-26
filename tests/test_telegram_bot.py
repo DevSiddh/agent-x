@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 from phase3.telegram_bot import (
     _slugify,
     apply_universal_template,
+    parse_spec_reply,
     get_blocked_project,
     handle_text,
     handle_document,
@@ -33,6 +34,37 @@ class TestSlugify:
 
     def test_empty_fallback(self):
         assert _slugify("!!!") == "project"
+
+
+class TestParseSpecReply:
+    def test_standard_choices(self):
+        out = parse_spec_reply("1a, 2a, 3c")
+        assert "New project from scratch" in out
+        assert "SQLite" in out
+        assert "No auth" in out
+
+    def test_other_with_free_text(self):
+        out = parse_spec_reply("1a, 2e Redis, 3d OAuth2")
+        assert "New project from scratch" in out
+        assert "Redis" in out
+        assert "OAuth2" in out
+
+    def test_none_skipped(self):
+        out = parse_spec_reply("1a, 2d, 3c, none")
+        assert "none" not in out.lower()
+
+    def test_fully_free_text_passes_through(self):
+        out = parse_spec_reply("just build it with postgres and jwt")
+        assert "just build it with postgres and jwt" in out
+
+    def test_empty_returns_original(self):
+        out = parse_spec_reply("")
+        assert out == ""
+
+    def test_mixed_structured_and_free(self):
+        out = parse_spec_reply("1a, 2b, 3c, add rate limiting and caching")
+        assert "New project from scratch" in out
+        assert "rate limiting" in out
 
 
 class TestUniversalTemplate:
@@ -101,7 +133,7 @@ class TestHandleText:
         # No YAML yet — waiting for spec reply
         assert not list(tmp_path.glob("*.yaml"))
         text = mock_post.call_args[1]["json"]["text"]
-        assert "specs needed" in text
+        assert "Specs" in text or "specs" in text
 
     def test_new_project_saves_pending_spec(self, tmp_path, monkeypatch):
         monkeypatch.setattr("phase3.telegram_bot.INTAKE_DIR", tmp_path)

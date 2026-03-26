@@ -80,6 +80,58 @@ def get_blocked_project() -> dict | None:
     return None
 
 
+SPEC_MENU = """
+1️⃣ Project type:
+   a) New project from scratch
+   b) Improve existing code
+   c) Other (describe)
+
+2️⃣ Database:
+   a) SQLite  b) PostgreSQL  c) MongoDB  d) None  e) Other
+
+3️⃣ Auth:
+   a) JWT  b) Basic auth  c) None  d) Other
+
+4️⃣ Extra requirements? (type freely or 'none')
+
+Reply like:  1a, 2a, 3c, none
+Or mix:      1a, 2e Redis, 3d OAuth2, add rate limiting
+""".strip()
+
+# Maps option letter → human-readable label per question
+_SPEC_MAP: dict[str, dict[str, str]] = {
+    "1": {"a": "New project from scratch", "b": "Improve existing code"},
+    "2": {"a": "SQLite", "b": "PostgreSQL", "c": "MongoDB", "d": "No database"},
+    "3": {"a": "JWT auth", "b": "Basic auth", "c": "No auth"},
+}
+
+
+def parse_spec_reply(reply: str) -> str:
+    """
+    Convert structured reply (e.g. '1a, 2b, 3c, add rate limiting') into
+    plain-English spec string for Agent-Y.
+    Unknown tokens passed through as-is (free text).
+    """
+    parts = [p.strip() for p in reply.replace(";", ",").split(",")]
+    resolved: list[str] = []
+    for part in parts:
+        if not part or part.lower() == "none":
+            continue
+        # Match patterns like "1a", "2e Redis", "3d OAuth2 with refresh tokens"
+        import re
+        m = re.match(r"^([1-4])([a-e])\s*(.*)", part, re.IGNORECASE)
+        if m:
+            q, opt, extra = m.group(1), m.group(2).lower(), m.group(3).strip()
+            label = _SPEC_MAP.get(q, {}).get(opt)
+            if label:
+                resolved.append(f"{label}{': ' + extra if extra else ''}")
+            else:
+                resolved.append(part)  # unknown option → pass through
+        else:
+            resolved.append(part)  # free text
+    return ", ".join(resolved) if resolved else reply
+
+
 def apply_universal_template(raw_text: str) -> str:
     """Wrap raw user text into a structured goal Agent-Y understands."""
     return (
@@ -103,10 +155,11 @@ def resume_project(token: str, chat_id: str, project_slug: str, user_reply: str)
     pending = _load_pending_spec()
 
     if pending and pending.get("project_id") == project_slug:
-        # Sub-case A: spec collection complete → launch build
+        # Sub-case A: spec collection complete → parse menu reply → launch build
         original_goal = pending["goal"]
+        parsed_specs = parse_spec_reply(user_reply)
         full_goal = apply_universal_template(
-            f"{original_goal}\n\nUser specs: {user_reply}"
+            f"{original_goal}\n\nUser specs: {parsed_specs}"
         )
         _clear_pending_spec()
         INTAKE_DIR.mkdir(parents=True, exist_ok=True)
@@ -195,16 +248,13 @@ def _set_registry_blocked(slug: str) -> None:
 
 
 def start_new_project(token: str, chat_id: str, raw_text: str) -> None:
-    """Ask 2 spec questions first, save pending goal, set blocked_waiting_for_user."""
+    """Show spec menu, save pending goal, set blocked_waiting_for_user."""
     slug = _slugify(raw_text)
     _save_pending_spec(raw_text, slug)
     _set_registry_blocked(slug)
     log.info("telegram_bot.spec_requested", project_id=slug)
     _reply(token, chat_id,
-           f"⚙️ Got it. Quick specs needed for *{slug}*:\n\n"
-           f"1. Separate new project or improve existing code?\n"
-           f"2. Any specific requirements / tech stack? (or type 'none')\n\n"
-           f"Reply with both answers and I'll start building.")
+           f"⚙️ Got it! Specs for *{slug}*:\n\n{SPEC_MENU}")
 
 
 # ---------------------------------------------------------------------------
