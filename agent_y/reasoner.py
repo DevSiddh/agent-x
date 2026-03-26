@@ -277,9 +277,11 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - Use FLAT file structure — all files in project root, no src/ or tests/ subdirectories
 - Test file imports: use module name only, e.g. "from add import add" not "from src.add import add"
 - All inputs and expected values in acceptance criteria MUST be strings
-- CRITICAL: expected values must match EXACT Python return values. If a function returns None, expected="None". If it returns [], expected="[]". If it returns {"id":1}, expected='{"id":1}'.
-- NEVER use expected="success" or expected="Database created" — functions don't return prose strings
-- Implementation files must contain REAL working code — functions must RETURN the expected value
+- CRITICAL: inputs must be a single function call on ONE line: ["add(1, 2)"] not multi-step code
+- CRITICAL: expected must be the EXACT Python return value as string: "3", "[]", "None", '{"id":1}'
+- NEVER use expected="success" or expected="created" — only actual return values
+- NEVER use multi-step inputs like ["conn = get_db()", "conn.cursor()"] — one call only
+- Implementation files must RETURN the expected value from the target function
 - For APIs: define a plain function (NOT FastAPI route) named after the target_function. FastAPI routes are tested via httpx TestClient separately.
 - For FastAPI tests: test files MUST use "from fastapi.testclient import TestClient; from <module> import app; client = TestClient(app)" and call client.get/post/put/delete
 - For databases: use sqlite3 (stdlib) — do NOT use sqlalchemy
@@ -297,7 +299,13 @@ PLAN SIZE RULES (strict):
 
 Output valid JSON only. Start with { and nothing else before it.
 
-Required JSON schema:
+EXAMPLE — simple function:
+{"tasks": [{"task_id": "T1", "action": "write_file", "description": "Create add module", "files_to_touch": ["test_add.py", "add.py"], "patch_order": ["test_add.py", "add.py"], "acceptance_criteria": {"target_function": "add", "cases": [{"inputs": ["add(2, 3)"], "expected": "5"}, {"inputs": ["add(0, 0)"], "expected": "0"}, {"inputs": ["add(-1, 1)"], "expected": "0"}]}, "depends_on": []}]}
+
+EXAMPLE — FastAPI with TestClient (target_function must be an HTTP test function name):
+{"tasks": [{"task_id": "T1", "action": "write_file", "description": "Create FastAPI todo app", "files_to_touch": ["test_todo_api.py", "todo_api.py"], "patch_order": ["test_todo_api.py", "todo_api.py"], "acceptance_criteria": {"target_function": "test_get_todos", "cases": [{"inputs": ["client.get('/todos').status_code"], "expected": "200"}, {"inputs": ["client.get('/todos').json()"], "expected": "[]"}, {"inputs": ["client.post('/todos', json={'title':'x'}).status_code"], "expected": "201"}]}, "depends_on": []}]}
+
+Required JSON schema (one task shown):
 {
   "tasks": [
     {
