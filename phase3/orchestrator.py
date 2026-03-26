@@ -14,10 +14,16 @@ from typing import Any
 
 import structlog
 
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None  # type: ignore
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from agent_y.reasoner import plan_goal
 from agent_y.retrospective import generate_skill
 from agent_y.schemas import SharedState, Task, TaskAction
 from phase2.executor.runner import RunResult, apply_patch, rollback, write_file
@@ -52,7 +58,9 @@ def is_new_file(file_path: str, repo_path: Path) -> bool:
 
 
 def is_done(state: SharedState) -> bool:
-    """True if ALL tasks are completed or blocked."""
+    """True if plan is non-empty AND all tasks are completed or blocked."""
+    if not state.plan:
+        return False
     return all(t.status in ("completed", "blocked") for t in state.plan)
 
 
@@ -216,14 +224,68 @@ def _execute_files(task: Task, repo_path: Path) -> None:
     return None
 
 
+def _build_agent_x_prompt(task: Task, file_str: str, action: TaskAction) -> str:
+    """Build full prompt for Agent-X — static prompt + AcceptanceCriteria + hint."""
+    cases_text = "\n".join(
+        f"  Input: {c.inputs} → Expected: {c.expected}"
+        for c in task.acceptance_criteria.cases
+    )
+    hint_section = f"\nHint: {task.hint}" if task.hint else ""
+    action_verb = "Create" if action == TaskAction.WRITE_FILE else "Edit"
+    return (
+        f"Task: {action_verb} `{file_str}`\n"
+        f"Description: {task.description}\n"
+        f"Target function: {task.acceptance_criteria.target_function}\n"
+        f"Acceptance criteria:\n{cases_text}"
+        f"{hint_section}\n"
+        f"File to {'create' if action == TaskAction.WRITE_FILE else 'edit'}: {file_str}"
+    )
+
+
+def _call_deepseek(prompt: str) -> str:
+    """Call DeepSeek API. Returns raw content string or '' on failure. Never raises."""
+    try:
+        import os
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if not api_key:
+            log.warning("orchestrator.deepseek_no_key")
+            return ""
+        if OpenAI is None:
+            log.warning("orchestrator.deepseek_not_installed")
+            return ""
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": AGENT_X_STATIC_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=800,
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as exc:
+        log.error("orchestrator.deepseek_error", error=str(exc))
+        return ""
+
+
 def _execute_file_ops(task: Task, repo_path: Path) -> bool:
     """Execute file operations for all files in patch_order. Returns True on success."""
     for file_str in task.patch_order:
         file_path = repo_path / file_str
-        if is_new_file(file_str, repo_path):
-            result = write_file(file_path, f"# {file_str}\n", repo_path)
+        action = TaskAction.WRITE_FILE if is_new_file(file_str, repo_path) else TaskAction.FILE_EDIT
+
+        prompt = _build_agent_x_prompt(task, file_str, action)
+        content = _call_deepseek(prompt)
+        if not content:
+            log.warning("orchestrator.file_op_failed", file=file_str, error="empty_deepseek_response")
+            return False
+
+        if action == TaskAction.WRITE_FILE:
+            result = write_file(file_path, content, repo_path)
         else:
-            result = RunResult(success=True)
+            result = apply_patch(content, repo_path)
+
         if not result.success:
             log.warning("orchestrator.file_op_failed", file=file_str, error=result.error)
             return False
@@ -294,10 +356,18 @@ def run_loop(
             log.info("orchestrator.loop.done", iterations=iteration)
             break
 
-        # Agent-Y needed when plan is empty
+        # Agent-Y: call plan_goal() when plan is empty
         if not state.plan:
-            log.info("orchestrator.loop.needs_agent_y", reason="plan_empty")
-            break
+            log.info("orchestrator.loop.calling_agent_y", reason="plan_empty")
+            try:
+                tasks = plan_goal(goal=state.goal, state=state)
+                state = state.model_copy(update={"plan": tasks})
+                save_state(state)
+                log.info("orchestrator.loop.plan_created", tasks=len(tasks))
+            except Exception as exc:
+                log.error("orchestrator.loop.plan_goal_failed", error=str(exc))
+                break
+            continue
 
         try:
             state = run_once(state, repo_path)

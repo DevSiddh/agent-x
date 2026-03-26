@@ -234,7 +234,8 @@ class TestRunOnce:
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)
 
         with patch("phase3.orchestrator._run_tests", return_value=True):
-            result = run_once(state, repo)
+            with patch("phase3.orchestrator._call_deepseek", return_value="def add(a,b): return a+b"):
+                result = run_once(state, repo)
 
         assert result.plan[0].status == "completed"
         assert result.failed_task_streak == 0
@@ -269,7 +270,8 @@ class TestRunOnce:
         os.environ["WORKSPACE_ROOT"] = str(tmp_path)
 
         with patch("phase3.orchestrator._run_tests", return_value=True):
-            result = run_once(state, repo)
+            with patch("phase3.orchestrator._call_deepseek", return_value="def add(a,b): return a+b"):
+                result = run_once(state, repo)
 
         assert result.failed_task_streak == 0
 

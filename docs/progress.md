@@ -10,9 +10,9 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v3 FULLY CLOSED — 559 tests passing (all clean, no warnings)
+## Current Status: v4.1 IN PROGRESS — 576 tests passing
 memory.jsonl: 513+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
-Next: v4.1 — Full autonomous loop (idea in → working repo out)
+DeepSeek wired into Orchestrator. Agent-Y plan_goal() integrated. Loop complete.
 
 ---
 
