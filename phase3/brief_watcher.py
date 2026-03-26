@@ -34,16 +34,38 @@ def _parse_brief(brief_path: Path) -> dict:
         return {}
 
 
+def _init_git_repo(repo_path: Path) -> None:
+    """Init a git repo at repo_path with an empty initial commit. No-op if already a repo."""
+    import subprocess
+    git_dir = repo_path / ".git"
+    if git_dir.exists():
+        return
+    repo_path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(repo_path)], check=True)
+    subprocess.run(["git", "-C", str(repo_path), "config", "user.email", "agentx@agentx.dev"], check=True)
+    subprocess.run(["git", "-C", str(repo_path), "config", "user.name", "Agent-X"], check=True)
+    subprocess.run(["git", "-C", str(repo_path), "commit", "--allow-empty", "-m", "init"], check=True)
+    log.info("brief_watcher.git_init", repo=str(repo_path))
+
+
 def _trigger_orchestrator(brief: dict, brief_path: Path) -> None:
     """Bootstrap SharedState from brief and hand off to Orchestrator."""
     try:
         from agent_y.schemas import SharedState
         from phase3.orchestrator import run_loop
-        from phase3.state_manager import save_state
+        from phase3.state_manager import STATE_PATH, save_state
 
         project_id = brief.get("project_id") or brief_path.stem
         goal = brief.get("goal", "No goal specified")
         workspace = Path(os.environ.get("WORKSPACE_ROOT", str(_REPO_ROOT / "projects")))
+        repo_path = workspace / project_id
+
+        # Init git repo before orchestrator touches any files
+        _init_git_repo(repo_path)
+
+        # Clear stale state so run_loop starts fresh
+        if STATE_PATH.exists():
+            STATE_PATH.unlink()
 
         state = SharedState(
             project_id=project_id,
@@ -59,7 +81,7 @@ def _trigger_orchestrator(brief: dict, brief_path: Path) -> None:
         processed.mkdir(exist_ok=True)
         brief_path.rename(processed / brief_path.name)
 
-        run_loop(project_id, goal, workspace / project_id)
+        run_loop(project_id, goal, repo_path)
     except Exception as exc:
         log.error("brief_watcher.trigger_error", error=str(exc))
 

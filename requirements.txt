@@ -19,3 +19,5 @@ einops>=0.6.0
 python-telegram-bot[webhooks]>=20.0
 streamlit==1.55.0
 pandas==2.3.3
+watchdog>=4.0.0
+PyYAML>=6.0
