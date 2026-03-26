@@ -135,9 +135,9 @@ class TestAppendTask:
         content = read_context(tmp_path)
         assert "T2" in content
 
-    def test_never_raises(self, tmp_path):
+    def test_never_raises(self, tmp_path: Path) -> None:
         state = _make_state()
-        append_task(state, _make_task("T1"), Path("/nonexistent"))
+        append_task(state, _make_task("T1"), tmp_path / "fake_repo")
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +155,8 @@ class TestReadContext:
         result = read_context(tmp_path)
         assert "Goal" in result
 
-    def test_never_raises(self):
-        result = read_context(Path("/nonexistent"))
+    def test_never_raises(self, tmp_path: Path) -> None:
+        result = read_context(tmp_path / "does_not_exist_subdir")
         assert result == ""
 
 

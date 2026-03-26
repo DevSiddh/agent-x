@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AcceptanceCase(BaseModel):
@@ -49,7 +49,13 @@ class Task(BaseModel):
     task_id: str
     action: TaskAction
     description: str
-    files_to_touch: list[str] = Field(max_length=3)
+    files_to_touch: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def check_files_limit(self) -> "Task":
+        if len(self.files_to_touch) > 3:
+            raise ValueError(f"files_to_touch max 3, got {len(self.files_to_touch)}")
+        return self
     patch_order: list[str] = []
     acceptance_criteria: AcceptanceCriteria
     depends_on: list[str] = []

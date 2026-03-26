@@ -210,8 +210,8 @@ def _run_tests(repo_path: Path, task: Task) -> bool:
     try:
         target = task.acceptance_criteria.target_function
         result = subprocess.run(
-            ["python3", "-m", "pytest", str(repo_path / "tests"), "-q",
-             f"-k", target, "--tb=short"],
+            [sys.executable, "-m", "pytest", str(repo_path / "tests"), "-q",
+             "-k", target, "--tb=short"],
             cwd=repo_path,
             capture_output=True,
             text=True,
