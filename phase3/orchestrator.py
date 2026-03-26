@@ -327,12 +327,16 @@ def _execute_file_ops(task: Task, repo_path: Path) -> bool:
 
 
 def _run_tests(repo_path: Path, task: Task) -> bool:
-    """Run pytest filtering by target_function. Returns True if all pass."""
+    """Run pytest on the task's test file. Returns True if all pass."""
     try:
-        target = task.acceptance_criteria.target_function
+        # Find the test file for this task; fall back to full repo
+        test_files = [f for f in task.files_to_touch if f.startswith("test_")]
+        if test_files:
+            pytest_target = str(repo_path / test_files[0])
+        else:
+            pytest_target = str(repo_path)
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(repo_path), "-q",
-             "-k", target, "--tb=short"],
+            [sys.executable, "-m", "pytest", pytest_target, "-q", "--tb=short"],
             cwd=repo_path,
             capture_output=True,
             text=True,
