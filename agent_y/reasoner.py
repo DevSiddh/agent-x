@@ -283,6 +283,7 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - For APIs: define a plain function (NOT FastAPI route) named after the target_function. FastAPI routes are tested via httpx TestClient separately.
 - For FastAPI tests: test files MUST use "from fastapi.testclient import TestClient; from <module> import app; client = TestClient(app)" and call client.get/post/put/delete
 - For databases: use sqlite3 (stdlib) — do NOT use sqlalchemy
+- For database tests: ALWAYS use in-memory DB (sqlite3.connect(":memory:")) in a pytest fixture with setup/teardown. Never use a file-based DB in tests.
 - Available packages: fastapi, flask, httpx, pytest, pydantic. Use ONLY these + stdlib
 - target_function for FastAPI tasks: name it after the route function (e.g. "get_todos" for GET /todos)
 - Each file must be ≤ 150 lines

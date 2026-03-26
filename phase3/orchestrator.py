@@ -50,6 +50,7 @@ AGENT_X_STATIC_PROMPT = (
     "Use FLAT file structure — all files in project root, no subdirectories. "
     "For implementation files: define the function directly, no unnecessary imports. "
     "For test files: the import line will be specified in the task — use it exactly. "
+    "For database tests: ALWAYS use sqlite3.connect(':memory:') in a pytest fixture — never a file DB. "
     "Hard limits: 150 lines per new file, 15 lines per edit. "
     "Return raw Python only. No markdown. No code fences. No explanation."
 )
