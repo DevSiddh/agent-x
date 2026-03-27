@@ -8,10 +8,16 @@
 - "step 0"                   → spike: prove core loop in 50 lines
 - "step N"                   → build one module, tests pass, commit, repeat
 
-## RESUMING A PROJECT
-- Open folder in Claude Code → CLAUDE.md auto-loads
-- Claude reads docs/progress.md automatically
-- Type "step N" (whatever is PENDING) → build continues
+## RESUMING AGENT-X (paste this to Claude exactly)
+
+```
+Read docs/BRIEFING.md first. That is the complete picture — architecture,
+current state, what works, what's broken, key decisions, and what was learned
+last session. Do NOT read any code files until I ask.
+
+After reading BRIEFING.md, read docs/session_prompts.md and tell me
+the next PENDING step. Then wait for me to confirm before starting.
+```
 
 ## SOMETHING FEELS WRONG
 - "audit"    → reads 12 files, reports GREEN/YELLOW/RED, gives one action

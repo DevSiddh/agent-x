@@ -1,12 +1,14 @@
 # Agent-X + Agent-Y | Session Prompts — INDEX
-# Last updated: 2026-03-25
+# Last updated: 2026-03-27
 
 ---
 
-## ⚡ v4.1 IN PROGRESS — 580 tests, CI green, VPS verified
-# v3 FULLY CLOSED. DeepSeek wired. Rollback fix (staged files). TestReport rename fixed.
-# Next: Q3 fix (.agent/context.md commit to GitHub) + end-to-end test.
-# End-to-end test: drop brief.yaml → Agent-Y plans → Agent-X builds → tests pass → DONE.
+## ⚡ v4.1 PHASE 2 — 657 tests passing — 2026-03-27
+# v4.1 proven on simple tasks only. BM25 fully live. Viva prep complete (Reviews 3+4+5 locked).
+# Next phase: fix 9 creation mode gaps so real projects work (FastAPI, bots, CLI tools).
+# Full gap analysis → @docs/prompts/v41_creation_fixes.md
+# Execution order: FIX-1 → FIX-2 → FIX-3 → FIX-4 → FIX-5 → FIX-6 → FIX-7 → FIX-8 → FIX-9
+# All architectural questions answered and locked → @docs/gemini_reviews.md
 
 ## LIMITATIONS / OPEN QUESTIONS
 # docs/v30_open_questions.md is the AUTHORITATIVE list of open issues.
@@ -19,11 +21,11 @@
 
 ## ACTIVE QUEUE (execute in this order, one at a time)
 
-| Priority | Step | File | Status |
-|----------|------|------|--------|
-| ✅ DONE | step Y-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
-| ✅ DONE | step X-C0 | v30_creation_steps.md | DONE — 2026-03-25 |
-| ✅ DONE | step Y-C1 | v30_creation_steps.md | DONE — 2026-03-25 |
+| Priority | Step | Description | Status |
+|----------|------|-------------|--------|
+| ✅ DONE | step Y-C0 | schemas + plan_goal() + replan() | DONE — 2026-03-25 |
+| ✅ DONE | step X-C0 | write_file() + StateManager + Orchestrator | DONE — 2026-03-25 |
+| ✅ DONE | step Y-C1 | SkillVault + Best-of-N + Retrospective | DONE — 2026-03-25 |
 | ✅ DONE | step v3.1 | project context + registry | DONE — 2026-03-25 |
 | ✅ DONE | step v3.2 | interface layer | DONE — 2026-03-25 |
 | ✅ DONE | session-1 | BUG-1/2/3 | DONE — 2026-03-26 |
@@ -33,6 +35,17 @@
 | ✅ DONE | bugfix | rollback staged files + TestReport rename | DONE — 2026-03-26 |
 | ✅ DONE | Q3 fix | .agent/context.md commit to GitHub after task | DONE — 2026-03-26 |
 | ✅ DONE | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | DONE — 2026-03-26 |
+| ✅ DONE | BM25 | rank_bm25 installed — 657 tests passing | DONE — 2026-03-27 |
+| ✅ DONE | viva-prep | Gemini Q1/Q2/Q3 answered — Reviews 3+4+5 locked | DONE — 2026-03-27 |
+| 🔴 NEXT | FIX-1 | global_interfaces injected into _build_agent_x_prompt() | PENDING |
+| 🔴 | FIX-2 | pip install before pytest in _run_tests() | PENDING |
+| 🔴 | FIX-3 | scaffold task T0 — stub-driven, topological order | PENDING |
+| 🟡 | FIX-4 | requirements.txt task in CREATION_SYSTEM_PROMPT | PENDING |
+| 🟡 | FIX-5 | context.md injected into plan_goal() on resume | PENDING |
+| 🟡 | FIX-6 | replan() receives actual failed_diff | PENDING |
+| 🟠 | FIX-7 | file_edit generates real unified diff via difflib | PENDING |
+| 🟠 | FIX-8 | resolve_safe_path() audit — every write in _execute_file_ops | PENDING |
+| 🟠 | FIX-9 | placeholder detection before write_file() | PENDING |
 
 ---
 

@@ -1,5 +1,5 @@
 # Agent-X | Progress Tracker
-# Last updated: 2026-03-26
+# Last updated: 2026-03-27
 # Full build history (v1–v2.3): docs/archive/progress_v1_v2.md
 
 ---
@@ -10,10 +10,10 @@ Full vision → @docs/vision.md
 
 ---
 
-## Current Status: v4.1 PROVEN — 596 tests passing
-memory.jsonl: 513+ entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
-brief_watcher LIVE. Drop brief.yaml → working repo in 12 seconds. End-to-end proven on VPS.
-Next: Telegram notification when loop completes.
+## Current Status: v4.1 IN PROGRESS — 657 tests passing
+memory.jsonl: 605 entries | registry.jsonl: LIVE | skill_vault.jsonl: LIVE
+BM25 fully live (rank_bm25). End-to-end proven on simple tasks only.
+Next: FIX-1 through FIX-9 — unlock real multi-file projects (FastAPI, bots, CLI tools).
 
 ---
 
@@ -96,8 +96,22 @@ Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
 | Q3 fix | _commit_context() tests + Q3 marked done | DONE | 585 | 2026-03-26 |
 | yc0 fix | task.action trusted over is_new_file; test mock for plan_goal | DONE | 604 | 2026-03-26 |
 | telegram bot | telegram_bot.py — poll text/files → projects/new/ → run_loop() | DONE | 614 | 2026-03-26 |
+| BM25 install | rank_bm25 installed — Jina 800MB ripped out — zero RAM retrieval | DONE | 657 | 2026-03-27 |
+| viva prep | Gemini Reviews 3+4+5 logged — BM25F, LoRA quality, Thompson decay locked | DONE | 657 | 2026-03-27 |
+
+## Locked Decisions (2026-03-27) — do not relitigate
+
+| Decision | What | Gate |
+|----------|------|------|
+| BM25 precision stack | L1 hard filter → L2 BM25F custom → L3 LLM re-ranker | L3 only at 50k entries |
+| LoRA quality signals | failure_category dedup → test/impl ratio → Thompson surprise | 50 real entries + <think> |
+| Synthetic CoT backfill | deepseek-reasoner (NOT Claude) for <think> generation | after 10 real projects |
+| LoRA gate revised | 50 real-project entries WITH <think> blocks (NOT 500 synthetic) | unmovable |
+| Thompson EB prior | category-average init replaces Beta(1,1) | gate: 20+ arms |
+| Thompson decay | γ=0.95 per project completion, floor clamped to max(α,1.0) | gate: 20+ arms |
+| Age gate | keep until EB prior validated, then remove | not preemptive |
 
 ## Last Test Run
 ```
-614 tests passing — 2026-03-26
+657 tests passing — 2026-03-27
 ```
