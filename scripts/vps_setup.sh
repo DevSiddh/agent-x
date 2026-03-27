@@ -65,21 +65,20 @@ GITHUB_WEBHOOK_SECRET=testsecret123
 # Telegram bot
 TELEGRAM_BOT_TOKEN=         # get from @BotFather
 TELEGRAM_CHAT_ID=           # get from @userinfobot (your personal chat ID)
-AGENT_X_DIR=/home/youruser/agent-x   # CHANGE to actual path on VPS
+WORKSPACE_ROOT=/home/youruser/projects   # CHANGE: where Orchestrator creates new projects
 EOF
     echo "    → .env created at $ENV_FILE"
 else
     echo "==> .env already exists"
 fi
 
-# ── 8. systemd service ────────────────────────────────────────────────────────
-SERVICE_NAME="agentx-telegram"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+# ── 8. systemd services (3 services — telegram, webhook, dashboard) ───────────
 
-echo "==> Creating systemd service: $SERVICE_NAME"
-sudo tee "$SERVICE_FILE" > /dev/null << EOF
+# ── 8a. Telegram bot ──────────────────────────────────────────────────────────
+echo "==> Creating systemd service: agentx-telegram"
+sudo tee /etc/systemd/system/agentx-telegram.service > /dev/null << EOF
 [Unit]
-Description=Agent-X Telegram Bot
+Description=Agent-XYZ Telegram Bot
 After=network.target
 
 [Service]
@@ -87,7 +86,51 @@ Type=simple
 User=$USER
 WorkingDirectory=$PROJECT_DIR
 EnvironmentFile=$PROJECT_DIR/.env
-ExecStart=$PROJECT_DIR/.venv/bin/python scripts/telegram_bot.py
+ExecStart=$PROJECT_DIR/.venv/bin/python phase3/telegram_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ── 8b. Webhook server (FastAPI) ──────────────────────────────────────────────
+echo "==> Creating systemd service: agentx-webhook"
+sudo tee /etc/systemd/system/agentx-webhook.service > /dev/null << EOF
+[Unit]
+Description=Agent-XYZ Webhook Server
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+EnvironmentFile=$PROJECT_DIR/.env
+ExecStart=$PROJECT_DIR/.venv/bin/python -m uvicorn phase2.webhook.server:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ── 8c. Streamlit dashboard ───────────────────────────────────────────────────
+echo "==> Creating systemd service: agentx-dashboard"
+sudo tee /etc/systemd/system/agentx-dashboard.service > /dev/null << EOF
+[Unit]
+Description=Agent-XYZ Streamlit Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+EnvironmentFile=$PROJECT_DIR/.env
+ExecStart=$PROJECT_DIR/.venv/bin/streamlit run dashboard/app.py --server.port 8501 --server.headless true
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -98,27 +141,28 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl enable agentx-telegram agentx-webhook agentx-dashboard
 
 echo ""
 echo "==> Setup complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Edit .env and fill in all values:"
+echo "  1. Fill in .env:"
 echo "        nano $ENV_FILE"
 echo ""
-echo "  2. Get your Telegram chat ID:"
-echo "        Message @userinfobot on Telegram → copy the id: field"
+echo "  2. Start all 3 services:"
+echo "        sudo systemctl start agentx-telegram agentx-webhook agentx-dashboard"
 echo ""
-echo "  3. Create your bot:"
-echo "        Message @BotFather → /newbot → copy the token"
+echo "  3. Check all are running:"
+echo "        sudo systemctl status agentx-telegram agentx-webhook agentx-dashboard"
 echo ""
-echo "  4. Start the bot service:"
-echo "        sudo systemctl start $SERVICE_NAME"
-echo "        sudo systemctl status $SERVICE_NAME"
+echo "  4. Watch logs per service:"
+echo "        journalctl -u agentx-telegram -f"
+echo "        journalctl -u agentx-webhook -f"
+echo "        journalctl -u agentx-dashboard -f"
 echo ""
-echo "  5. Watch logs:"
-echo "        journalctl -u $SERVICE_NAME -f"
+echo "  5. Services auto-start on reboot. Closing terminal = nothing dies."
 echo ""
-echo "  6. (Optional) Set up scheduled steps:"
-echo "        bash scripts/install_cron.sh"
+echo "  NOTE: Webhook server path assumes phase2/webhook/server.py:app"
+echo "        Dashboard path assumes dashboard/app.py"
+echo "        Adjust ExecStart in /etc/systemd/system/ if paths differ."

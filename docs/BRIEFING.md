@@ -144,6 +144,12 @@ Ranked Verbosity = token budget trick only, NOT retrieval precision fix.
 
 ---
 
+## AGENT BEHAVIOR SPEC
+Full behavioral contract — how Agent-XYZ runs every project end-to-end:
+@docs/AGENT_BEHAVIOR.md ← read this before touching any loop/orchestrator/telegram code
+
+---
+
 ## KEY FILES (where things live)
 
 ```

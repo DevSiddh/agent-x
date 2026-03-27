@@ -373,56 +373,215 @@ v3.1  → Project memory + design intelligence
          + Executor interface abstraction (LocalExecutor/DockerExecutor/VPSExecutor)
 v3.2  → Interface layer: Control API + Telegram bot + CLI tool + local log watcher
 v3.3  → DockerExecutor + VPSExecutor backends + Code interpreter (#1)
-v4.0  → Fine-tune local model on memory.jsonl (LoRA, gate: 500+ accepted runs)
-v4.1  → Idea in → working repo out (interruptible, phone-controllable)
+v4.0  → Fine-tune local model on memory.jsonl (LoRA, gate: 50 real entries + <think>)
+v4.1  → Idea in → backend repo out (interruptible, phone-controllable)
+v4.2  → Agent-U (UI) + Agent-D (DB/auth/storage) → full-stack repo out
+v4.3  → Niche template libraries for U + D (crypto/stocks/polymarket/web)
+v5.0  → Component library (earned) + local model zero API cost
 ```
 
-## Multi-Agent Architecture (v4.x — when it gets big)
+## Multi-Agent Architecture (v4.2+)
 
-Same Orchestrator loop, specialized agents per domain:
+Same Orchestrator loop, specialized agents per domain.
+Each agent owns one layer. No overlap. Clean contracts through SharedState.
 
 ```
-Agent-Y          → brain — plans everything, reasons, architects
-Agent-X          → backend / infra / CI fixes (EXISTS NOW)
-Agent-UI         → frontend — components, styles, visual regression
-Agent-Data       → SQL / migrations / schemas
-Orchestrator     → coordinates all agents, one task at a time
+brief.yaml
+    ↓
+Agent-Y   → brain — plans ALL layers, splits tasks by agent type
+    ↓
+Orchestrator — routes tasks to correct agent, one at a time
+    ↓              ↓                ↓
+Agent-D        Agent-X          Agent-U
+data layer     business logic   UI layer
+runs first     runs second      runs third
+    ↓              ↓                ↓
+SharedState.global_interfaces — contract between all agents
 ```
 
-Agent-UI pattern (same as Agent-X, different domain):
+---
+
+### Agent-U (v4.2) — UI Designer
+
+Owns: frontend templates, pages, styles, layout.
+Truth signal: human approval (not pytest — UI is subjective).
+
+HONEST SCOPE (locked — no hope-driven engineering):
+```
+IN SCOPE (DeepSeek proven capable):
+  HTML + CSS + Jinja2 templates     → Python-rendered, no build tools
+  Streamlit dashboards              → pure Python, already in our stack
+  Basic vanilla JS (no framework)   → fetch + DOM, DeepSeek handles well
+
+OUT OF SCOPE until proven (do not assume):
+  React / Next.js                   → unknown DeepSeek reliability
+  Angular / Vue                     → unknown DeepSeek reliability
+  MERN stack                        → 4 ecosystems, too many failure points
+  TypeScript strict mode            → DeepSeek makes type errors frequently
+```
+
+Gate to expand scope: prove DeepSeek success rate > 85% on 10 real React tasks.
+Until then: Jinja2 + Streamlit covers most real project UIs without risk.
+
+Human-in-the-loop (mandatory for all UI regardless of tech):
 ```
 Agent-Y plans UI task
-→ Agent-UI generates component
-→ Playwright screenshots it
-→ pixel-diff against expected
-→ accepted/rejected → memory
-→ Thompson learns which UI patterns work
+→ Agent-U generates component
+→ Playwright screenshots it → sent to Telegram
+→ User: ✅ looks good  OR  ❌ change X  OR  ✏️ adjust Y
+→ ONLY after approval → next component
+→ accepted → memory.jsonl → Thompson learns UI patterns
 ```
+
+No separate router between agents — Orchestrator reads task.agent_type field.
+SharedState.global_interfaces is the contract. No new infrastructure needed.
+
+Gate: Playwright installed + Agent-X proven on 10+ real projects.
+
+---
+
+### Agent-D (v4.2) — Database, Storage, Auth
+
+Owns: DB schemas, migrations, connections, auth, file storage.
+Runs BEFORE Agent-X — X needs the data layer to exist before writing business logic.
+
+Why Agent-D is a separate agent (not part of Agent-X):
+  DB/auth is the most error-prone layer in any project.
+  It has its own testing patterns (fixtures, rollbacks, migrations).
+  It is completely separable from business logic.
+  Agent-X focuses on pure logic. Agent-D handles all plumbing.
+  Clear contract: Agent-D outputs models/schemas → Agent-X reads them.
+
+```
+Agent-Y plans data layer task
+→ Agent-D builds:
+    DB schema (SQLAlchemy models / Prisma)
+    Migrations (Alembic / raw SQL)
+    Auth (JWT + bcrypt / OAuth2 / sessions)
+    Storage (S3 / local / CDN)
+    Connection pool (DB URL, pool size, timeout)
+→ Writes to SharedState.global_interfaces
+→ Agent-X reads: model names, field types, auth endpoints
+→ No guessing. No import errors. No schema mismatch.
+```
+
+Template library:
+```
+db_templates/
+├── postgres/    SQLAlchemy + Alembic + connection pool
+├── sqlite/      lightweight, no server, perfect for bots/CLI
+├── mongodb/     motor async driver + document schemas
+├── auth/
+│   ├── jwt/     JWT + bcrypt + refresh tokens
+│   └── oauth/   OAuth2 + providers (Google, GitHub)
+└── storage/
+    ├── s3/      boto3 + presigned URLs + multipart
+    └── local/   file handling + serving
+```
+
+Gate: Agent-X proven on 10+ real projects first.
+
+---
+
+### Agent Communication (no router — already solved)
+
+No separate router process. Orchestrator already routes via task.agent_type.
+SharedState.global_interfaces is the contract between all agents.
+Adding a router = one more failure point, more bugs, over-engineering.
+
+```python
+# Task schema already handles routing:
+class Task(BaseModel):
+    agent_type: str = "X"   # "X" | "D" | "U"
+    ...
+
+# Orchestrator dispatch (simple, already exists):
+if task.agent_type == "D": agent_d.execute(task)
+elif task.agent_type == "U": agent_u.execute(task)
+else: agent_x.execute(task)   # default
+```
+
+### Execution Order (locked)
+
+```
+Agent-Y   plans everything → splits into D-tasks, X-tasks, U-tasks
+Agent-D   data layer first → schema + auth + storage → SharedState
+Agent-X   business logic   → reads D output → routes, services, tests
+Agent-U   UI layer last    → reads X output → Jinja2/Streamlit pages
+                           → human approves each component
+```
+
+Why this order is the only correct order:
+  D before X: X needs models to import from
+  X before U: U needs endpoints to call
+  Human gates U: no objective truth for UI, approval is the test
+
+---
+
+### Full-Stack Project Output
+
+```
+brief.yaml: "Build crypto trading dashboard with portfolio tracker"
+    ↓
+Agent-Y: plan with D-tasks + X-tasks + U-tasks
+    ↓
+Agent-D: postgres + sqlalchemy models (Trade, Portfolio, Price)
+         JWT auth
+         S3 storage for trade history export
+    ↓
+Agent-X: FastAPI routes (trades CRUD, portfolio summary, price feed)
+         business logic + pytest passing
+    ↓
+Agent-U: trading_dashboard template loaded
+         candlestick chart component → user approves ✅
+         portfolio panel → user approves ✅
+         orderbook widget → user approves ✅
+    ↓
+working full-stack crypto dashboard
+backend + frontend + auth + DB + tests
+user approved every UI step
+```
+
+That is not a toy. That is a real product.
+
+---
+
+### Roadmap Update
+
+```
+v4.1   → idea in → backend repo out (current build)
+v4.2   → Agent-U + Agent-D → idea in → full-stack repo out
+v4.3   → niche template libraries for U + D (crypto/stocks/polymarket/web)
+v5.0   → component library (earned) + fine-tuned local model
+```
+
+---
 
 ### Solo vs Team boundary
 
 ```
-Solo buildable (v1 → v4.1):
-  Agent-X + Agent-Y + Orchestrator
+Solo buildable (v1 → v4.2):
+  Agent-X + Agent-Y + Agent-U + Agent-D + Orchestrator
   LoRA fine-tuning
-  Interface layer (CLI + Telegram)
-  Agent-UI basic version
+  Interface layer (Telegram + Streamlit)
+  Niche template libraries
 
-Needs a team (after v4.1):
-  Agent-UI at production quality  → frontend engineer
-  Multi-repo at scale (100+ repos) → DevOps
-  Docker/VPS executor              → infra engineer
-  Fine-tuning pipeline             → ML engineer
+Needs a team (after v4.2):
+  Agent-U at production quality     → frontend engineer
+  Agent-D at enterprise scale       → DB/infra engineer
+  Multi-repo at scale (100+ repos)  → DevOps
+  Fine-tuning pipeline              → ML engineer
 ```
 
 ### The play
 ```
 v1-v2  → prove it works           (DONE)
 v3-v4  → make it autonomous       (building now)
-v4.1   → idea in → working repo out
-          → that demo gets funding or a team
+v4.1   → backend repo out         → demo #1
+v4.2   → full-stack repo out      → demo #2 → funding or team
+v5.0   → local model, zero API cost → moat is complete
 ```
-One person can get to v4.1. After that the project attracts people.
+One person can get to v4.2. After that the project attracts people.
 That's how every serious tool started.
 
 ---

@@ -46,6 +46,12 @@
 | 🟠 | FIX-7 | file_edit generates real unified diff via difflib | PENDING |
 | 🟠 | FIX-8 | resolve_safe_path() audit — every write in _execute_file_ops | PENDING |
 | 🟠 | FIX-9 | placeholder detection before write_file() | PENDING |
+| 🔵 | FIX-10 | BM25F hard filter + field weighting in similarity.py | PENDING |
+| 🔵 | FIX-3b | Template scaffold library — fastapi_crud, telegram_bot, cli_tool | PENDING |
+| 🔵 | FIX-11 | Plan Checkpoint + Spec Conflict + User Type UX | PENDING |
+| 🔵 | FIX-12 | Mid-task Interrupt — SKIPPED state, cascade, between-task check | PENDING |
+| 🔵 | FIX-13 | Iteration Audit Gate — stubs, imports, scope drift, plan vs built | PENDING |
+| 🔵 | FIX-14 | Multi-language backend — language field in brief.yaml, tier warnings | PENDING |
 
 ---
 
