@@ -52,6 +52,8 @@
 | 🔵 | FIX-12 | Mid-task Interrupt — SKIPPED state, cascade, between-task check | PENDING |
 | 🔵 | FIX-13 | Iteration Audit Gate — stubs, imports, scope drift, plan vs built | PENDING |
 | 🔵 | FIX-14 | Multi-language backend — language field in brief.yaml, tier warnings | PENDING |
+| ⚪ | FIX-15 | Domain Splintering (Topological Sort) — domains[], DAG validation, two-stage Agent-Y, context isolation | GATED: after FIX-9 done |
+| ⚪ | FIX-16 | Private SDK + Perplexity deep research — niche pip packages, .pyi stub injection, GitHub Packages | GATED: 10 real projects |
 
 ---
 

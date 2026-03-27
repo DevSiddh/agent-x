@@ -647,3 +647,192 @@ Tier 3 (warn + redirect): rust, ruby, php, java, csharp
 | Project template system | Runnable A2 | PARKED v4.2 | Needs real project variety first |
 | OpenAI embeddings API | Gemini | DONE | BM25 already in production (657 tests) |
 | ONNX quantization | Gemini | DONE | BM25 already solved the RAM problem |
+
+---
+
+---
+
+### FIX-15 — Domain Splintering (Topological Sort Architecture)
+**Origin:** User's idea — session 2026-03-27 (explored via Merge Sort + Quick Sort → resolved to Topological Sort)
+**Gate:** After FIX-9 is done and passing. Do not attempt before.
+
+**The Problem it solves:**
+Linear orchestration (Task1→Task2→...→Task40) compounds failure probability.
+At 90% per-task success: 0.90^40 = 1.5% end-to-end success on 25-file projects.
+Domain Splintering resets the compound probability per domain, not per project.
+
+**Why Topological Sort (not Merge Sort or Quick Sort):**
+```
+Merge Sort alone:   splits into equal chunks (5-6 files) — predictable size
+                    BUT ignores dependency order — Domain B might need a file
+                    that ended up in Domain C by accident
+
+Quick Sort alone:   pivot = most-imported file, build it first
+                    BUT chunk sizes vary wildly (2 files vs 15 files)
+                    AND Agent-Y must predict the pivot before files exist
+
+Topological Sort:   the parent algorithm both are approximating
+                    Step 1 — Agent-Y predicts full dependency graph from brief
+                              (FastAPI: models.py has most imports pointing to it)
+                    Step 2 — Topological sort determines BUILD ORDER of all files
+                              (most-depended-upon file always built first)
+                    Step 3 — Slice into equal chunks of 5-6 files (Merge Sort sizing)
+                              preserving topological order within each chunk
+                    Step 4 — Each chunk = one domain, built in dependency order
+
+Result: domain SIZE is bounded (Merge Sort) + domain ORDER is dependency-correct
+        (Quick Sort pivot) + no accidental cross-domain import failures
+```
+
+**Viva sentence:** "Agent-Y runs topological sort on the dependency DAG predicted
+from the brief, then slices into equal domains. Domain order = dependency order.
+Domain size = bounded complexity. DeepSeek never sees more than 6 files at once."
+
+**How it works:**
+```
+Plan phase (two-stage Agent-Y — same model, two sequential calls):
+  Call 1: brief → full file list + predicted dependency edges
+  Call 2: file list + edges → topological sort → slice into domains of 5-6 files
+           output: domains[] with build order + dependency graph
+
+  Example (FastAPI CRUD, 20 files):
+    Domain A: config.py, database.py, models.py    (no deps — foundation)
+    Domain B: schemas.py, crud.py, auth.py         (depends on A signatures)
+    Domain C: routes.py, middleware.py, deps.py    (depends on A+B signatures)
+    Domain D: main.py, tests/, requirements.txt    (imports all — glue)
+
+Build phase: each domain = isolated mini-project
+  Domain A: build → 4-gate check → pytest → extract AST signatures → ✅
+  Context boundary (free — just control global_interfaces contents)
+  Domain B: receives only Domain A .pyi signatures → build → pytest → ✅
+  Context boundary
+  Domain C: receives Domain A+B signatures only → build → pytest → ✅
+  Context boundary
+  Domain D: receives all signatures → integration test → ✅
+```
+
+**Math improvement:**
+```
+Old (linear):  0.90^40 = 1.5%   end-to-end
+New (domains): 0.90^6  = 53%    per domain × human checkpoint between domains
+```
+
+**What changes:**
+- SharedState gets `domains: list[Domain]` alongside `plan: list[Task]`
+- Agent-Y CREATION_SYSTEM_PROMPT: two-stage planning (file list → domain split)
+- Orchestrator: outer domain loop wraps existing task loop — inner loop UNCHANGED
+- Human checkpoint (FIX-11) shown between every domain, not just at start
+- No new agent needed — two-stage Agent-Y is same model, two API calls
+
+**Context boundary — it's free, not a new mechanism:**
+Agent-X is stateless — every DeepSeek API call is already a fresh context window.
+"Context wipe" = just control what global_interfaces contains at domain boundaries.
+Domain B receives only Domain A's AST signatures, never Domain A's full source files.
+FIX-1 already controls this. Zero new code needed for context isolation.
+
+**Backward compatibility — zero regression:**
+Simple project (<10 files) → Agent-Y emits 1 domain → outer loop runs once
+→ behavior identical to today's linear loop → no existing tests break.
+
+**Cons — properly specced:**
+
+Con 1: Circular dependency deadlock
+  Problem: Agent-Y predicts bad dependency graph — Domain B depends on C, C on B.
+           Topological sort fails. Build never starts. No error raised.
+  Fix: DAG validation at Plan Checkpoint (FIX-11), BEFORE first domain build:
+    ```python
+    def validate_domain_dag(domains: list[Domain]) -> bool:
+        # DFS cycle detection on domain dependency graph
+        # if cycle found → return False
+    # cycle detected → reject plan
+    # Telegram: "Circular dependency between Domain B and C — replanning"
+    # ask Agent-Y to replan domain split → max 2 replans → then human redesigns
+    ```
+  Size: ~15 lines DFS. Runs at Plan Checkpoint only.
+
+Con 2: Integration failure (semantic vs syntax mismatch)
+  Problem: Domain A builds save_trade(price: float). Domain D calls save_trade(trade_data: dict).
+           Both pass isolated pytest. Integration test fails. Which domain is wrong?
+           Auto-editing either domain risks breaking its own isolated tests.
+  Fix: Structured failure flow using FIX-12 interrupt mechanism:
+    ```
+    Integration test fails →
+      Telegram: "Integration failed.
+                 Error: save_trade() expected float, got dict.
+                 Domain A owns it. Domain D calls it.
+                 Which domain to fix? Reply: A / B / C / D"
+      Orchestrator pauses (FIX-12 already has pause/resume)
+      User replies "A" →
+      Orchestrator reopens Domain A tasks from the broken interface
+      Domain A rebuilt → AST re-extracted → retry integration test
+      Max 2 integration retries → human takeover, orchestrator halts
+    ```
+  Rule: orchestrator NEVER auto-edits a completed domain without user instruction.
+  FIX-12 interrupt handler already has the pause/resume mechanism — just wire it here.
+
+**Prerequisite:** FIX-1 (AST mapper) must exist — without it domains cannot merge.
+**Size:** ~75 lines total — outer domain loop (~30) + DAG validation (~15) + integration failure flow (~30 wired to FIX-12).
+
+---
+
+### FIX-16 — Private SDK + Perplexity Deep Research Template Layer
+**Origin:** User's idea — session 2026-03-27
+**Gate:** 10 real projects completed. Do not attempt before.
+
+**The Problem it solves:**
+For niche complex domains (crypto, quant, finance), DeepSeek invents 40-file projects
+from scratch. 4,000 lines of WebSocket + order execution logic = high hallucination surface.
+FIX-3b local templates cover generic projects (FastAPI, bots, CLI).
+This covers niche complex domains where core logic is stable, battle-tested, and repeatable.
+
+**How it works:**
+```
+Step 1 — Perplexity deep research (done by user, not Agent-XYZ):
+  Query: "best open-source Python [domain] libraries — most starred, actively maintained, MIT"
+  Perplexity returns: top 3-5 repos with rationale
+  User picks one. User reviews license. User audits code quality.
+
+Step 2 — Package wrapping (done by user):
+  Clone repo → rip out core logic → wrap with clean interface
+  Publish as private pip package: agentxyz-crypto-core, agentxyz-quant-core, etc.
+  Host on GitHub Packages (free private PyPI registry)
+  User writes tests for the wrapper. Package is immutable after publish.
+
+Step 3 — .pyi stub generation (automated):
+  python -c "import mypackage; ..." → extract all public signatures
+  Write to templates/stubs/agentxyz_crypto_core.pyi
+  These stubs are what Agent-XYZ receives — never the source code
+
+Step 4 — Agent-XYZ build (zero hallucination on core logic):
+  Task 1: write requirements.txt → includes --extra-index-url + package name
+  Task 2: write main.py → imports from agentxyz_crypto_core → 20 lines of glue
+  FIX-2 (pip install): installs package before pytest → zero VPS RAM cost
+  pytest: only tests glue code → tiny surface area
+  Agent-X cannot edit the package → hallucination on core logic = physically impossible
+```
+
+**Why Perplexity deep research specifically:**
+Standard Google search returns SEO noise. Perplexity deep research:
+- Reads GitHub READMEs + issues + commit history
+- Surfaces maintenance status (last commit, open issues, PR velocity)
+- Compares multiple candidates with rationale
+- Gives the right context to make a safe packaging decision
+One Perplexity query per domain = better than 2 hours of manual research.
+
+**Domain target list (build these packages when gate is met):**
+```
+agentxyz-crypto-core     → Binance/ccxt WebSocket + order execution
+agentxyz-quant-core      → pandas + ta-lib strategy patterns
+agentxyz-polymarket-core → prediction market odds + position management
+agentxyz-telegram-core   → python-telegram-bot wrapper (already thin — low priority)
+```
+
+**VPS compatibility:** GitHub Packages install via uv pip = zero RAM. FIX-2 already handles it.
+
+**What maps to existing code (no new build before gate):**
+- .pyi stub injection → FIX-1 (AST mapper) extended to handle external stubs
+- pip install from GitHub Packages → FIX-2 (requirements.txt install already works)
+- Template match → FIX-3b manifest.yaml gets `sdk_package` field when available
+
+**Size (when gate met):** ~30 lines orchestrator + manifest.yaml extension + stub files per domain.
+**Not a code change until 10 real projects prove which domains repeat.**
