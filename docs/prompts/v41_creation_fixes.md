@@ -281,11 +281,26 @@ No validation catches this. The stub gets written. pytest runs. All tests fail.
 Agent-X retries 3 times with "tests failed" as rejection reason — but the real reason
 is that the implementation was never written. The retry prompt is wrong.
 
-**What changes:**
-Add _is_placeholder(content) check between DeepSeek response and write_file().
-Simple heuristics: # TODO + pass blocks, all-pass file, under 3 lines of actual code.
-If placeholder detected: return False immediately → triggers retry with correct reason.
-Retry prompt then says "your previous response was a placeholder stub, not an implementation."
+**What changes — three gates before write_file():**
+```
+Gate 1 — Placeholder check (original FIX-9):
+  _is_placeholder(content): regex catches TODO/pass stubs
+  If placeholder → reject immediately, retry with correct reason
+
+Gate 2 — Syntax check (expanded from REVIEW 6):
+  ast.parse(content): catches syntax errors before pytest boots
+  If SyntaxError → reject, retry with "your code has a syntax error"
+  Zero RAM, zero API cost, faster than pytest
+
+Gate 3 — Import validation (expanded from REVIEW 6):
+  if task_number > 1 and global_interfaces not empty:
+    check all import statements against global_interfaces
+    if import not found → reject, retry with "X does not exist yet"
+  SKIP on task 1 (global_interfaces empty — nothing to validate against)
+```
+
+All three gates run before write_file(). If any fails → reject + correct retry reason.
+Pytest remains gate 4 — logic correctness, unchanged.
 
 ---
 
@@ -555,6 +570,11 @@ This is an architectural advantage, not a feature bolt-on.
 
 **Size:** ~70 lines total.
 **Done condition:** pytest passes + test that SKIP message cascades correctly to dependent tasks.
+
+**Git milestone checkpoint (added from REVIEW 6):**
+After iteration audit passes → git tag milestone-{n}
+If next iteration fails catastrophically → git reset --hard milestone-{n}
+Zero new infrastructure. Blast radius fully contained per milestone.
 
 ---
 

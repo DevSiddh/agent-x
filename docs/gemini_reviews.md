@@ -437,6 +437,71 @@ that doesn't crash in production. Competitors with cloud budgets can parallelize
 
 ---
 
+---
+
+## REVIEW 6 — Blast Radius Containment + AST Pre-Flight (2026-03-27)
+
+**Topic:** Plan efficiency required to survive DeepSeek hallucination at scale
+
+### Input (Gemini)
+- Save State Architecture: treat every 5-10 tasks as isolated milestone, roll back on failure
+- Context Pruning: need-to-know only — global_interfaces signatures not full files
+- Template Cheat Sheet: DeepSeek only writes unique business logic, not boilerplate
+- AST Pre-Flight Check: ast.parse() + import validation before pytest runs
+- Verdict: 60-70% success rate on 30-file project is realistic with guardrails
+
+### Claude Evaluation
+
+**ACCEPTED — Save State / Milestone rollback:**
+Correct concept. Already planned as FIX-13 (Iteration Audit Gate).
+Gemini's mechanism "roll back to save state" left unspecified.
+The mechanism is free and already in our stack: git tag per milestone.
+  Milestone 1 passes audit → git tag milestone-1
+  Milestone 2 fails catastrophically → git reset --hard milestone-1
+Zero new infrastructure. Add git tag step to FIX-13 scope.
+
+**ACCEPTED — Context Pruning:**
+global_interfaces AST mapper (FIX-1) already does exactly this.
+Signatures only, not full files. Gemini validated our existing design.
+
+**ACCEPTED — Template Cheat Sheet:**
+Identical to FIX-3b already planned. Direction confirmed.
+
+**ACCEPTED with caveat — AST Pre-Flight Check:**
+ast.parse() before pytest is correct and cheap. Zero RAM. Zero API cost.
+Enhances FIX-9 (placeholder detection) — complementary, not competing:
+  FIX-9 (current):    regex catches TODO/pass placeholder stubs
+  AST pre-flight:     ast.parse() catches syntax errors (gate 1)
+                      import check against global_interfaces (gate 2)
+  pytest:             logic correctness (gate 3, unchanged)
+
+Caveat Gemini missed: import validation requires global_interfaces populated.
+Task 1 has empty global_interfaces — cannot validate imports for first task.
+  Task 1:  skip import validation (global_interfaces empty)
+  Task 2+: validate imports against global_interfaces from previous tasks
+Add sequencing guard before import check.
+
+**REJECTED — "Attention dilution" mechanism:**
+Conclusion (keep context lean) is correct.
+Mechanism description is wrong. Transformers don't linearly dilute attention.
+Real issue: positional weighting — distant context gets less weight than recent.
+Lean prompts work because less surface area for error, not "dilution."
+
+### What Gemini Missed
+- git tag as the save state mechanism — free, already in our stack
+- Task 1 import validation impossible (empty global_interfaces) — sequencing bug
+- AST pre-flight is gate 1, pytest is gate 2 — both needed, neither replaces the other
+- 0.9^55 math was already in our analysis — Gemini rediscovered it
+
+### Locked Decisions
+- FIX-9 scope expanded: ast.parse() syntax check + import validation against global_interfaces
+  sequencing: skip import check on task 1, enable from task 2 onward
+- FIX-13 scope expanded: git tag per milestone after audit passes
+  rollback: git reset --hard <milestone-tag> on catastrophic failure
+- Code generation offer: DEFERRED — analysis phase only
+
+---
+
 ## HOW TO USE THIS FILE
 
 1. Before any viva/pitch: read VIVA PREP section cold
