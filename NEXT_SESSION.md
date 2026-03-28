@@ -1,10 +1,12 @@
 # NEXT_SESSION — read this first, skip BRIEFING.md unless unclear
 # Updated: 2026-03-28
 
-Step:     FIX-8
-Files:    phase3/orchestrator.py → _execute_file_ops() — audit every path construction
-Read:     docs/prompts/v41_creation_fixes.md → FIX-8 section only
-Note:     FIX-8 = resolve_safe_path() missing on some writes — security audit + targeted additions
+Step:     ALL TIER 1-3 FIXES COMPLETE (FIX-1 through FIX-9)
+Next:     FIX-17 → dynamic test generation (TIER 4, gated after FIX-3+FIX-9)
+          OR run a harder smoke test (FastAPI project) to validate full pipeline
+Read:     docs/prompts/v41_creation_fixes.md → FIX-17 section
+Branch:   agent-x/fix-step0
+Tests:    python -m pytest tests/ -q  (657 must pass)
 Branch:   agent-x/fix-step0
 Tests:    python -m pytest tests/ -q  (657 must pass before touching anything)
 
@@ -24,6 +26,12 @@ Last session (2026-03-28):
     read_context(repo_path) on resume, Agent-Y gets "what's already built" block
   - FIX-7 DONE — FILE_EDIT fixed: DeepSeek returns full new content → _make_unified_diff()
     generates diff via difflib → apply_patch() applies it. Empty diff = no-op (not error).
+  - FIX-8 DONE — _safe_repo_path() wraps ALL file_str constructions in _execute_file_ops()
+    and _execute_scaffold() — path traversal blocked at every entry point
+  - FIX-9 DONE — 3 gates before write_file():
+    Gate 1: _is_placeholder() — catches TODO/pass stubs, rejects with correct reason
+    Gate 2: _has_syntax_error() — ast.parse before pytest boots, zero cost
+    Gate 3: _check_imports() — validates imports against global_interfaces (task 2+)
   - FIX-6 DONE — replan() now fires correctly:
     * run_once() streak==2 path just marks failed (no longer returns early)
     * _execute_file_ops() returns (bool, last_content) tuple — content stored in state.last_failed_diff

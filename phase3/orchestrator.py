@@ -348,7 +348,11 @@ def _execute_scaffold(task: Task, repo_path: Path) -> bool:
     try:
         created_dirs: set[Path] = set()
         for file_str in task.files_to_touch:
-            fp = repo_path / file_str
+            try:
+                fp = _safe_repo_path(repo_path, file_str)
+            except PermissionError as exc:
+                log.warning("orchestrator.scaffold_blocked", file=file_str, error=str(exc))
+                return False
             fp.parent.mkdir(parents=True, exist_ok=True)
             # Write stub (idempotent — skip if file already exists)
             if not fp.exists():
@@ -393,7 +397,13 @@ def _execute_file_ops(
 
     last_content = ""
     for file_str in task.patch_order:
-        file_path = repo_path / file_str
+        # FIX-8: all paths from task input go through safe resolver
+        try:
+            file_path = _safe_repo_path(repo_path, file_str)
+        except PermissionError as exc:
+            log.warning("orchestrator.file_op_blocked", file=file_str, error=str(exc))
+            return False, last_content
+
         # Trust the task's declared action; only fall back to FILE_EDIT if unspecified
         if task.action in (TaskAction.WRITE_FILE, TaskAction.FILE_EDIT):
             action = task.action
@@ -406,6 +416,25 @@ def _execute_file_ops(
         if not content:
             log.warning("orchestrator.file_op_failed", file=file_str, error="empty_deepseek_response")
             return False, last_content
+
+        # FIX-9 Gate 1 — placeholder check (only impl files, not test files)
+        if not file_str.startswith("test_") and _is_placeholder(content):
+            log.warning("orchestrator.placeholder_detected", file=file_str)
+            return False, content
+
+        # FIX-9 Gate 2 — syntax check (Python files only)
+        if file_path.suffix == ".py":
+            syn_err = _has_syntax_error(content)
+            if syn_err:
+                log.warning("orchestrator.syntax_error_detected", file=file_str, error=syn_err)
+                return False, content
+
+        # FIX-9 Gate 3 — import validation (task 2+ only, Python impl files)
+        if not file_str.startswith("test_") and file_path.suffix == ".py" and global_interfaces:
+            imp_err = _check_imports(content, global_interfaces)
+            if imp_err:
+                log.warning("orchestrator.bad_import_detected", file=file_str, error=imp_err)
+                return False, content
 
         if action == TaskAction.WRITE_FILE:
             result = write_file(file_path, content, repo_path)
@@ -440,6 +469,76 @@ def _make_unified_diff(original: str, new_content: str, file_str: str) -> str:
         tofile=f"b/{file_str}",
     ))
     return "".join(diff)
+
+
+def _safe_repo_path(repo_path: Path, file_str: str) -> Path:
+    """
+    FIX-8: Resolve file_str within repo_path. Raises PermissionError on traversal.
+    All file paths from task/LLM input must go through this before use.
+    """
+    resolved = (repo_path / file_str).resolve()
+    if not str(resolved).startswith(str(repo_path.resolve())):
+        raise PermissionError(f"Sandbox escape blocked: {file_str!r}")
+    return resolved
+
+
+def _is_placeholder(content: str) -> bool:
+    """
+    FIX-9 Gate 1: Detect stub/placeholder code before writing to disk.
+    Catches: TODO comments, bare pass bodies, NotImplementedError, ellipsis stubs.
+    """
+    import re
+    patterns = [
+        r"#\s*TODO",
+        r"#\s*FIXME",
+        r"raise\s+NotImplementedError",
+        r"^\s*\.\.\.\s*$",           # bare ellipsis body
+    ]
+    # Bare pass: function/class body is ONLY pass (no real logic)
+    lines = [l.strip() for l in content.splitlines() if l.strip() and not l.strip().startswith("#")]
+    non_def_lines = [l for l in lines if not l.startswith(("def ", "class ", "import ", "from ", "@"))]
+    if non_def_lines and all(l == "pass" for l in non_def_lines):
+        return True
+    for pat in patterns:
+        if re.search(pat, content, re.MULTILINE | re.IGNORECASE):
+            return True
+    return False
+
+
+def _has_syntax_error(content: str) -> str:
+    """
+    FIX-9 Gate 2: ast.parse check — catches syntax errors before pytest boots.
+    Returns error message string if broken, empty string if clean.
+    """
+    import ast
+    try:
+        ast.parse(content)
+        return ""
+    except SyntaxError as e:
+        return f"SyntaxError line {e.lineno}: {e.msg}"
+
+
+def _check_imports(content: str, global_interfaces: dict[str, list[str]]) -> str:
+    """
+    FIX-9 Gate 3: Check import statements against known global_interfaces.
+    Only runs when global_interfaces is non-empty (task 2+).
+    Returns error message if unknown import found, else empty string.
+    """
+    import re
+    if not global_interfaces:
+        return ""
+    known_modules = {Path(f).stem for f in global_interfaces}
+    imports = re.findall(r"^from\s+(\w+)\s+import|^import\s+(\w+)", content, re.MULTILINE)
+    for grp1, grp2 in imports:
+        mod = grp1 or grp2
+        # Only flag imports that look like project-local modules (no dots, not stdlib/site)
+        stdlib = {"os", "sys", "re", "json", "math", "pathlib", "typing", "collections",
+                  "datetime", "functools", "itertools", "subprocess", "uuid", "hashlib",
+                  "sqlite3", "ast", "difflib", "shutil", "tempfile", "time", "logging",
+                  "fastapi", "pydantic", "httpx", "flask", "pytest", "structlog", "openai"}
+        if mod not in stdlib and mod not in known_modules:
+            return f"Import '{mod}' not found in known project modules: {sorted(known_modules)}"
+    return ""
 
 
 def _uv_available() -> bool:
