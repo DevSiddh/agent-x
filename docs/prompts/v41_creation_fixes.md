@@ -25,14 +25,14 @@ The ceiling today:
 
 ```
 TIER 1 — Breaks every real project (highest priority)
-  FIX-1: L2/L9  global_interfaces not injected into prompt     (5 lines)
+  FIX-1: L2/L9  _run_ast_mapper scope + global_interfaces injection + SkillVault wiring (~15 lines)
   FIX-2: L3+G   pip install + Surgical Pytest (-x --ff + timeout tiers) (~15 lines)
   FIX-3: A1     no scaffold task T0 — blank directory start     (30 lines)
 
 TIER 2 — Breaks mid-complexity projects
   FIX-4: L7     no requirements.txt generation in plan          (prompt change)
   FIX-5: A3     plan_goal() ignores context.md on resume        (10 lines)
-  FIX-6: L10    replan() fires with empty failed_diff           (15 lines)
+  FIX-6: L10    replan() never fires + empty failed_diff when it does  (~13 lines)
 
 TIER 3 — Breaks advanced features
   FIX-7: A5     file_edit sends raw text not unified diff       (30 lines)
@@ -41,7 +41,7 @@ TIER 3 — Breaks advanced features
 
 TIER 4 — Unlocks Devin-like test quality + diagnostic reasoning (gated: after FIX-3/FIX-9)
   FIX-17: dynamic test generation — TEST_FRAMEWORK_MAP + conftest.py per project_type (~80 lines)
-  FIX-18: diagnostic reasoning — read_file/grep tools before fix + reasoning trace in memory.jsonl (~60 lines)
+  FIX-18: agentic RAG for creation mode — creation_context_builder.py adapts existing context_builder (~30 lines)
 
 REJECTED — do not build
   Async API calls  violates VPS sequential constraint (1 vCPU)
@@ -203,6 +203,28 @@ Tier 3 — Full suite release (FIX-13):
 
 **Constraint locked by VPS rules:**
 Use uv for all dependency management. No per-project venv. Global cache only.
+
+**Pre-build risk audit (2026-03-28):**
+Current _run_tests() state vs spec — exact collision map:
+
+| Item | Current | Action |
+|------|---------|--------|
+| test_files targeting | EXISTS (line 374) | keep — do not rewrite |
+| -q --tb=short flags | EXISTS | keep |
+| -x --ff flags | MISSING | add to cmd |
+| timeout=60 hardcoded | WRONG — spec uses TEST_TIMEOUT_FILE env var | replace |
+| else: pytest_target = str(repo_path) | WRONG — spec says return True | replace |
+| try/except wrapper | EXISTS — spec omits it but it is correct | keep |
+| pip install block | MISSING entirely | add above pytest logic |
+| _uv_available() helper | MISSING — only in spec | add above _run_tests() |
+| .env.example timeout vars | MISSING | add after code |
+
+Exact edit plan (3 edits, one file + one config):
+1. Add _uv_available() helper directly above _run_tests()
+2. Replace _run_tests() body — keep try/except shell, replace everything inside
+3. Add TEST_TIMEOUT_FILE=30 and TEST_TIMEOUT_FULL=600 to .env.example
+
+Spec code block is correct as-is — paste inside existing try/except, do not strip it.
 
 ---
 
