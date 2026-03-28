@@ -293,7 +293,8 @@ Break a goal into 2-4 tasks MAX (after T0). Each task must:
 - NEVER use expected="success" or expected="created" — only actual return values
 - NEVER use multi-step inputs like ["conn = get_db()", "conn.cursor()"] — one call only
 - Implementation files must RETURN the expected value from the target function
-- For APIs: define a plain function (NOT FastAPI route) named after the target_function. FastAPI routes are tested via httpx TestClient separately.
+- For FastAPI: define proper route functions with correct signatures — GET routes use no body param, POST routes use a Pydantic model as body. NEVER define a route with zero parameters.
+- For FastAPI POST routes: ALWAYS use @app.post("/path", status_code=201) so TestClient gets 201 not 200.
 - For FastAPI tests: test files MUST use "from fastapi.testclient import TestClient; from <module> import app; client = TestClient(app)" and call client.get/post/put/delete
 - For databases: use sqlite3 (stdlib) — do NOT use sqlalchemy
 - For database tests: ALWAYS use in-memory DB (sqlite3.connect(":memory:")) in a pytest fixture with setup/teardown. Never use a file-based DB in tests.

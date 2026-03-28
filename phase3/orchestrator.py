@@ -51,8 +51,13 @@ AGENT_X_STATIC_PROMPT = (
     "For implementation files: define the function directly, no unnecessary imports. "
     "For test files: the import line will be specified in the task — use it exactly. "
     "For database tests: ALWAYS use sqlite3.connect(':memory:') in a pytest fixture — never a file DB. "
+    "For FastAPI routes: ALWAYS use proper Body/Query params — POST routes take a Pydantic model as body. "
+    "For FastAPI POST routes: ALWAYS use @app.post('/path', status_code=201). "
+    "Never define a FastAPI route function with zero parameters. "
+    "For requirements.txt: output ONLY package names, one per line (e.g. fastapi\\nuvicorn\\npytest). "
+    "No version pins. No comments. No extra text. Just package names. "
     "Hard limits: 150 lines per new file, 15 lines per edit. "
-    "Return raw Python only. No markdown. No code fences. No explanation."
+    "Return raw Python only (or plain text for .txt files). No markdown. No code fences. No explanation."
 )
 
 
@@ -260,6 +265,16 @@ def _build_agent_x_prompt(
     skill_context: str = "",
 ) -> str:
     """Build full prompt for Agent-X — static prompt + AcceptanceCriteria + hint."""
+    # Special case: requirements.txt — simple direct prompt, no acceptance criteria needed
+    if file_str == "requirements.txt":
+        return (
+            f"Create requirements.txt for this project.\n"
+            f"Project goal: {task.description}\n"
+            "Output ONLY package names, one per line. No version pins. No comments. No headers.\n"
+            "Always include pytest. Infer all other packages from the goal.\n"
+            "Example output for a FastAPI project:\nfastapi\nuvicorn\npytest\nhttpx"
+        )
+
     cases_text = "\n".join(
         f"  Input: {c.inputs} → Expected: {c.expected}"
         for c in task.acceptance_criteria.cases
@@ -276,7 +291,7 @@ def _build_agent_x_prompt(
         # Strip test_ prefix if target_function is a test name not an impl name
         impl_fn = fn[5:] if fn.startswith("test_") else fn
         # For FastAPI TestClient tests, use app import not function import
-        if any(kw in fn.lower() for kw in ("endpoint", "route", "api", "client")):
+        if any(kw in fn.lower() for kw in ("endpoint", "route", "api", "client", "todo", "get", "post", "put", "delete")):
             import_hint = (
                 f"\nFor this test file: from fastapi.testclient import TestClient; "
                 f"from {module_name} import app; client = TestClient(app)"
