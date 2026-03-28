@@ -37,8 +37,8 @@
 | ✅ DONE | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | DONE — 2026-03-26 |
 | ✅ DONE | BM25 | rank_bm25 installed — 657 tests passing | DONE — 2026-03-27 |
 | ✅ DONE | viva-prep | Gemini Q1/Q2/Q3 answered — Reviews 3+4+5 locked | DONE — 2026-03-27 |
-| 🔴 NEXT | FIX-1 | _run_ast_mapper per-file scope + global_interfaces injection + SkillVault wiring in _build_agent_x_prompt() | PENDING |
-| 🔴 | FIX-2 | pip install + Surgical Pytest (-x --ff + timeout tiers) in _run_tests() | PENDING |
+| ✅ DONE | FIX-1 | _run_ast_mapper per-file scope + global_interfaces injection + SkillVault wiring in _build_agent_x_prompt() | DONE — 2026-03-28 |
+| 🔴 NEXT | FIX-2 | pip install + Surgical Pytest (-x --ff + timeout tiers) in _run_tests() | PENDING |
 | 🔴 | FIX-3 | scaffold task T0 — stub-driven, topological order | PENDING |
 | 🟡 | FIX-4 | requirements.txt task in CREATION_SYSTEM_PROMPT | PENDING |
 | 🟡 | FIX-5 | context.md injected into plan_goal() on resume | PENDING |

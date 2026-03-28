@@ -109,7 +109,13 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
         return state
 
     vault = SkillVault()
-    used_skill_ids: list[str] = []
+    # SkillVault: sample relevant skills + track IDs for Thompson update
+    _relevant = vault.find_relevant(state.goal)
+    _top_skills = vault.sample_top(_relevant) if _relevant else []
+    skill_context = "\n".join(
+        f"[SKILL: {s.skill_id}]\n{s.constraint_text}" for s in _top_skills
+    ) if _top_skills else ""
+    used_skill_ids: list[str] = [s.skill_id for s in _top_skills]
     failed_diffs: list[str] = []
     winning_diff: str = ""
     variations_tried: int = 0
@@ -122,7 +128,7 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
 
     for attempt_idx, _ in enumerate(attempts):
         variations_tried += 1
-        exec_ok = _execute_file_ops(task, repo_path)
+        exec_ok = _execute_file_ops(task, repo_path, state.global_interfaces, skill_context)
         if not exec_ok:
             rollback(repo_path)
             failed_diffs.append(f"attempt_{attempt_idx}: file_op_error")
@@ -241,7 +247,13 @@ def _execute_files(task: Task, repo_path: Path) -> None:
     return None
 
 
-def _build_agent_x_prompt(task: Task, file_str: str, action: TaskAction) -> str:
+def _build_agent_x_prompt(
+    task: Task,
+    file_str: str,
+    action: TaskAction,
+    global_interfaces: dict[str, list[str]] | None = None,
+    skill_context: str = "",
+) -> str:
     """Build full prompt for Agent-X — static prompt + AcceptanceCriteria + hint."""
     cases_text = "\n".join(
         f"  Input: {c.inputs} → Expected: {c.expected}"
@@ -271,12 +283,26 @@ def _build_agent_x_prompt(task: Task, file_str: str, action: TaskAction) -> str:
         impl_fn = fn[5:] if fn.startswith("test_") else fn
         import_hint = f"\nThis is the implementation file. Define {impl_fn}() directly. Do NOT import from main or any other module."
 
+    # Inject known interfaces from previous tasks (empty on Task 1 — zero cost)
+    interfaces_section = ""
+    if global_interfaces:
+        lines = ["Known interfaces (from previous tasks):"]
+        for fname, sigs in global_interfaces.items():
+            lines.append(f"{fname}:")
+            lines.extend(f"  {s}" for s in sigs)
+        interfaces_section = "\n" + "\n".join(lines)
+
+    # Inject relevant skills from SkillVault (empty if vault is empty)
+    skill_section = f"\nRelevant patterns:\n{skill_context}" if skill_context else ""
+
     return (
         f"Task: {action_verb} `{file_str}`\n"
         f"Description: {task.description}\n"
         f"Target function: {task.acceptance_criteria.target_function}\n"
         f"Acceptance criteria:\n{cases_text}"
         f"{import_hint}"
+        f"{interfaces_section}"
+        f"{skill_section}"
         f"{hint_section}\n"
         f"File to {'create' if action == TaskAction.WRITE_FILE else 'edit'}: {file_str}"
     )
@@ -309,7 +335,12 @@ def _call_deepseek(prompt: str) -> str:
         return ""
 
 
-def _execute_file_ops(task: Task, repo_path: Path) -> bool:
+def _execute_file_ops(
+    task: Task,
+    repo_path: Path,
+    global_interfaces: dict[str, list[str]] | None = None,
+    skill_context: str = "",
+) -> bool:
     """Execute file operations for all files in patch_order. Returns True on success."""
     for file_str in task.patch_order:
         file_path = repo_path / file_str
@@ -319,7 +350,7 @@ def _execute_file_ops(task: Task, repo_path: Path) -> bool:
         else:
             action = TaskAction.WRITE_FILE if is_new_file(file_str, repo_path) else TaskAction.FILE_EDIT
 
-        prompt = _build_agent_x_prompt(task, file_str, action)
+        prompt = _build_agent_x_prompt(task, file_str, action, global_interfaces, skill_context)
         content = _strip_code_fences(_call_deepseek(prompt))
         if not content:
             log.warning("orchestrator.file_op_failed", file=file_str, error="empty_deepseek_response")
@@ -363,14 +394,17 @@ def _run_tests(repo_path: Path, task: Task) -> bool:
 
 
 def _run_ast_mapper(files: list[str], repo_path: Path) -> dict[str, list[str]]:
-    """Run ast_mapper on specific files, return {file: [signatures]}."""
+    """Run ast_mapper on specific files only, return {file: [signatures]}."""
+    from phase2.tools.ast_mapper import _extract_signatures
     result: dict[str, list[str]] = {}
     try:
         for f in files:
             fp = repo_path / f
             if fp.exists() and fp.suffix == ".py":
-                skeleton = map_repo(fp.parent, max_tokens=500)
-                result[f] = skeleton.splitlines()
+                source = fp.read_text(encoding="utf-8", errors="ignore")
+                sigs = _extract_signatures(source, fp)
+                if sigs:
+                    result[f] = sigs
     except Exception as exc:
         log.warning("orchestrator.ast_mapper_error", error=str(exc))
     return result

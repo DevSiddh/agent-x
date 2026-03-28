@@ -1,5 +1,5 @@
 # Agent-X | Progress Tracker
-# Last updated: 2026-03-27
+# Last updated: 2026-03-28
 # Full build history (v1–v2.3): docs/archive/progress_v1_v2.md
 
 ---
@@ -98,6 +98,7 @@ Build order: hooks/skills at v3.2 — after v3.0 Orchestrator exists
 | telegram bot | telegram_bot.py — poll text/files → projects/new/ → run_loop() | DONE | 614 | 2026-03-26 |
 | BM25 install | rank_bm25 installed — Jina 800MB ripped out — zero RAM retrieval | DONE | 657 | 2026-03-27 |
 | viva prep | Gemini Reviews 3+4+5 logged — BM25F, LoRA quality, Thompson decay locked | DONE | 657 | 2026-03-27 |
+| FIX-1 | _run_ast_mapper per-file scope + global_interfaces injection + SkillVault wiring | DONE | 657 | 2026-03-28 |
 
 ## Locked Decisions (2026-03-27) — do not relitigate
 
