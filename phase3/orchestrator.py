@@ -67,10 +67,10 @@ def is_new_file(file_path: str, repo_path: Path) -> bool:
 
 
 def is_done(state: SharedState) -> bool:
-    """True if plan is non-empty AND all tasks are completed or blocked."""
+    """True if plan is non-empty AND all tasks are terminal (completed/blocked/skipped)."""
     if not state.plan:
         return False
-    return all(t.status in ("completed", "blocked") for t in state.plan)
+    return all(t.status in ("completed", "blocked", "skipped") for t in state.plan)
 
 
 def _block_dependents(state: SharedState, failed_task_id: str) -> SharedState:
@@ -680,6 +680,45 @@ def run_loop(
                 log.info("orchestrator.loop.plan_checkpoint_done")
             continue
 
+        # FIX-12: check interrupt queue before every task
+        from phase3.interrupt_handler import cascade_skip, check_interrupts
+        intent, state = check_interrupts(state)
+        if intent["action"] == "STOP":
+            log.info("orchestrator.loop.interrupt_stop")
+            from phase3.telegram_notify import send
+            send(f"🛑 Build halted by user — {project_id}")
+            save_state(state)
+            break
+        elif intent["action"] == "SKIP":
+            log.info("orchestrator.loop.interrupt_skip", keyword=intent["keyword"])
+            state = cascade_skip(state, intent["keyword"])
+            save_state(state)
+            from phase3.telegram_notify import send
+            skipped = [t.task_id for t in state.plan if t.status == "skipped"]
+            send(f"⏭️ Skipped: {', '.join(skipped)}")
+            continue
+        elif intent["action"] == "MODIFY":
+            log.info("orchestrator.loop.interrupt_modify", instruction=intent["instruction"])
+            # Treat as replan with user instruction as error_output
+            pending = [t for t in state.plan if t.status == "pending"]
+            if pending:
+                try:
+                    replan_resp = replan(
+                        state=state,
+                        failed_task=pending[0],
+                        failure_type="user_modify_request",
+                        error_output=intent["instruction"],
+                        failed_diff="",
+                        thompson_note="",
+                    )
+                    new_plan = [t for t in state.plan if t.status != "pending"] + replan_resp.tasks
+                    state = state.model_copy(update={"plan": new_plan, "plan_approved": False})
+                    save_state(state)
+                    log.info("orchestrator.loop.interrupt_modify_done")
+                except Exception as exc:
+                    log.error("orchestrator.loop.interrupt_modify_failed", error=str(exc))
+            continue
+
         try:
             state = run_once(state, repo_path)
         except Exception as exc:
@@ -721,10 +760,25 @@ def run_loop(
     else:
         log.info("orchestrator.loop.max_iterations", max_iterations=max_iterations)
 
-    # Telegram notification on exit
+    # Telegram notification on exit — FIX-12: include skipped in report
     completed = sum(1 for t in state.plan if t.status == "completed")
-    failed = sum(1 for t in state.plan if t.status == "failed")
-    blocked = sum(1 for t in state.plan if t.status == "blocked")
+    failed    = sum(1 for t in state.plan if t.status == "failed")
+    blocked   = sum(1 for t in state.plan if t.status == "blocked")
+    skipped   = sum(1 for t in state.plan if t.status == "skipped")
+
+    built_ids   = [t.task_id for t in state.plan if t.status == "completed"]
+    skipped_ids = [t.task_id for t in state.plan if t.status == "skipped"]
+
+    from phase3.telegram_notify import send as tg_send
+    status = "✅ DONE" if failed == 0 and blocked == 0 else "⚠️ PARTIAL"
+    lines = [f"{status} — {project_id}"]
+    if built_ids:
+        lines.append(f"✅ Built:   {', '.join(built_ids)} ({completed} tasks)")
+    if skipped_ids:
+        lines.append(f"⏭️ Skipped: {', '.join(skipped_ids)} (user request)")
+    if failed:
+        lines.append(f"✗ Failed:  {failed} tasks")
+    tg_send("\n".join(lines))
     notify_loop_done(project_id, completed, failed, blocked)
 
     return state
