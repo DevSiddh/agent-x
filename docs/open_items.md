@@ -61,7 +61,7 @@ After each session:
 | P12  | Bug signature has no repo scope — cross-project memory pollution possible | X-C0 | OPEN |
 | P13  | Missing Phase 2 deps in requirements.txt — openai, pydantic>=2.0, pytest-json-report | X-C0 | OPEN |
 | P20  | No auto-PR — patch accepted locally but never pushed to GitHub | D1 DONE | DONE (Step D1) |
-| P21  | ngrok URL changes on every restart — use static domain | v2.1 | OPEN |
+| P21  | ngrok URL changes on every restart — use static domain | v2.1 | DONE — moved to VPS static IP, ngrok irrelevant |
 | P22  | Single-file patch limit — multi-file bugs always abstain | X-C0 | DONE (Orchestrator fixes via task sequence) |
 | P23  | No codebase architecture understanding — file tree reader | D0 DONE | DONE (Step D0) |
 | P24  | BuildError always abstains — Docker logs have no Python tracebacks | DATA-GATED | OPEN — gate: 5+ real BuildError runs |

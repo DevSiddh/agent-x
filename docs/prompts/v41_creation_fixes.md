@@ -2289,3 +2289,228 @@ FIX-10 improves RAG precision in both pipelines simultaneously. Zero extra work.
 Schema extension: ~20 lines in memory_store.py. No diagnostics.py needed.
 **Done condition:** pytest passes + test that ImportError retry injects file content + RAG results
 into prompt, memory entry written with diagnosis_steps >= 2 entries and root_cause non-empty.
+
+---
+
+### FIX-19 — STATE_PATH multi-project isolation (B2)
+
+**Files:**
+- `phase3/state_manager.py`    MOD — get_state_path(), write_state(), read_state(), validate_slug()
+- `phase3/orchestrator.py`     MOD — ProjectContext class + del ctx after each project
+
+**Source:** Perplexity Sonnet + ChatGPT o4 + Gemini 2.5 Pro research (2026-03-28)
+
+**What is broken:**
+STATE_PATH = "memory/state.json" is a hardcoded singleton.
+Project B starts → overwrites project A's state mid-build → A is unrecoverable.
+Silent corruption. No error raised. Orchestrator continues on wrong state.
+
+**Verdict — state lives OUTSIDE the project repo:**
+```
+CORRECT:  memory/{slug}/state.json         ← outside workspace
+WRONG:    WORKSPACE_ROOT/{slug}/.agent/    ← inside workspace
+```
+
+Why outside wins for Agent-XYZ specifically:
+- Rollback rule: git reset HEAD -- . → git checkout -- . → git clean -fd
+- git clean -fd removes untracked directories
+- .agent/ is untracked (gitignored) → git clean -fd DELETES state.json mid-rollback
+- Agent-X hallucination risk: shutil.rmtree on workspace kills .agent/ too
+- Gemini: "workspace = operating table, memory = surgeon's brain"
+- If operating table catches fire → surgeon steps back intact
+
+Hybrid: state = outside. context.md = inside (already committed, v3.1 built).
+
+**What changes:**
+
+```python
+# phase3/state_manager.py
+
+import os, json, re, tempfile
+from pathlib import Path
+
+def validate_slug(slug: str) -> str:
+    if not re.fullmatch(r'[a-z0-9_-]{3,64}', slug):
+        raise ValueError(f"Invalid project slug: {slug!r}")
+    return slug
+
+def get_state_path(slug: str) -> Path:
+    validate_slug(slug)
+    memory_root = Path(os.environ["MEMORY_ROOT"])   # from .env only
+    path = memory_root / slug / "state.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+def write_state(slug: str, data: dict) -> None:
+    target = get_state_path(slug)
+    data["project_slug"] = slug          # load guard field
+    data["schema_version"] = "1"
+    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix="state_tmp_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())         # survive VPS power loss
+        os.replace(tmp, target)          # atomic POSIX rename
+    except Exception:
+        if os.path.exists(tmp): os.unlink(tmp)
+        raise
+
+def read_state(slug: str) -> dict:
+    path = get_state_path(slug)
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text())
+    if data.get("project_slug") != slug: # load guard
+        raise ValueError(f"State file slug mismatch: expected {slug}")
+    return data
+
+def cleanup_tmp_files(slug: str) -> None:
+    """Remove orphaned state_tmp_*.json from crashed writes."""
+    for f in get_state_path(slug).parent.glob("state_tmp_*.json"):
+        f.unlink(missing_ok=True)
+```
+
+```python
+# orchestrator.py — ProjectContext (replaces direct state.json calls)
+
+class ProjectContext:
+    def __init__(self, slug: str):
+        self.slug = slug
+        cleanup_tmp_files(slug)
+        self.state = read_state(slug)   # {} on first run
+
+    def save(self) -> None:
+        write_state(self.slug, self.state)
+
+# Sequential loop:
+for task in project_queue:
+    ctx = ProjectContext(slug=task.slug)
+    try:
+        run_project(ctx)
+        ctx.save()
+    except Exception as e:
+        ctx.state["last_error"] = str(e)
+        ctx.save()
+    finally:
+        del ctx   # explicit RAM release — 2GB VPS discipline
+```
+
+**Add to .env.example:**
+```
+MEMORY_ROOT=./memory   # where per-project state lives (outside workspace)
+```
+
+**Failure modes handled:**
+- git clean -fd rollback → state survives (outside workspace)
+- Agent hallucination deletes workspace → state survives
+- Mid-write VPS crash → state_tmp_*.json cleaned on next startup
+- Wrong slug passed → load guard raises ValueError immediately
+- Orphaned state after project delete → purge_project(slug) cleans memory/{slug}/
+
+**Build gate:** no gate — standalone change, safe to build anytime.
+**Size:** ~40 lines state_manager.py + ~15 lines orchestrator.py
+**Dependencies:** os, json, re, tempfile, pathlib — stdlib only. Zero new installs.
+**Done condition:** pytest passes + test slug="../../evil" raises ValueError +
+  test two projects write to separate paths + test load guard rejects wrong slug +
+  test state survives after git clean -fd simulation (delete workspace dir).
+
+---
+
+### FIX-3c — Tiered Complexity Gates (replaces flat 50-line limit)
+
+**Files:**
+- `phase3/complexity_gate.py`     NEW — ~40 lines
+- `phase3/orchestrator.py`        MOD — replace flat line check with complexity_gate()
+
+**Source:** Perplexity Sonnet + ChatGPT o4 + Gemini 2.5 Pro research (2026-03-28)
+
+**What is broken:**
+Flat 50-line limit treats all files identically.
+A 90-line config.py with 20 settings gets rejected — wastes a retry.
+A 35-line service.py with 4 nested branches + 3 side effects passes — fails pytest.
+Lines measure string length. Hallucination correlates with decision points, not line count.
+
+Math proof (Gemini 2.5 Pro):
+```
+P_success = 0.999^N  (per-token accuracy compounded)
+50 lines  (~500 tokens)  = 60.6% pass rate
+100 lines (~1000 tokens) = 36.7% pass rate  ← why logic files MUST stay at 50
+```
+
+**What changes — three-axis gate per file type:**
+
+```python
+# phase3/complexity_gate.py
+
+FILE_TYPE_GATES = {
+    # file_type: (max_lines, max_cc, max_functions)
+    "config":    (100,  3,  3),
+    "model":      (90,  5,  5),
+    "schema":     (85,  3,  4),
+    "test":      (120,  5, 10),
+    "route":      (55,  8,  4),
+    "service":    (50, 10,  3),
+    "util":       (65,  7,  5),
+    "migration": (120,  2,  3),
+    "scaffold":  (100,  2,  5),
+    "default":    (50, 10,  3),  # unrecognised → strictest
+}
+
+def detect_file_type(file_path: str) -> str:
+    name = Path(file_path).name.lower()
+    if name.startswith("test_"):              return "test"
+    if "config" in name:                      return "config"
+    if "schema" in name:                      return "schema"
+    if "model" in name:                       return "model"
+    if "route" in name or "endpoint" in name: return "route"
+    if "migration" in name:                   return "migration"
+    if "util" in name or "helper" in name:    return "util"
+    return "service"  # strictest default
+
+def complexity_gate(source: str, file_path: str) -> tuple[bool, str]:
+    file_type = detect_file_type(file_path)
+    max_lines, max_cc, max_funcs = FILE_TYPE_GATES[file_type]
+    lines = source.count('\n')
+    cc    = get_max_cc(source)       # radon — already in pipeline
+    funcs = count_functions(source)  # ast   — already in pipeline
+    if lines > max_lines:
+        return False, f"lines={lines} exceeds {max_lines} for {file_type} — split into smaller file"
+    if cc > max_cc:
+        return False, f"cyclomatic_complexity={cc} exceeds {max_cc} — simplify branches"
+    if funcs > max_funcs:
+        return False, f"functions={funcs} exceeds {max_funcs} for {file_type} — extract to separate module"
+    return True, "ok"
+```
+
+**Where it plugs in (Gate 4 after existing FIX-9 gates):**
+```
+_call_deepseek()
+    ↓
+Gate 1 — placeholder check  (FIX-9)
+Gate 2 — syntax check       (FIX-9)
+Gate 3 — import validation  (FIX-9)
+Gate 4 — complexity_gate()  ← FIX-3c NEW
+    ↓
+write_file()
+```
+
+**What this unlocks:**
+```
+Before: config.py 80 lines → REJECTED (wastes retry)
+After:  config.py 80 lines, CC=1, 2 funcs → PASSES (correct)
+
+Before: service.py 40 lines, CC=12 → PASSES → fails pytest
+After:  service.py 40 lines, CC=12 → REJECTED "simplify branches" (correct)
+
+Before: test_api.py 110 lines → REJECTED
+After:  test_api.py 110 lines, CC=3 → PASSES (correct)
+```
+
+Rejection message is specific + actionable → feeds retry prompt directly.
+Satisfies "each retry prompt MUST differ" rule automatically.
+
+**Build gate:** after FIX-3b complete.
+**Size:** ~40 lines new (complexity_gate.py) + ~5 lines mod in orchestrator.py
+**Dependencies:** radon + ast — both already in pipeline (FIX-9). Zero new installs.
+**Done condition:** pytest passes + test that config.py 90 lines passes gate + service.py CC=12 rejected with correct message.

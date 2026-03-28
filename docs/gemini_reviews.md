@@ -1,7 +1,7 @@
 # Gemini Reviews + Claude Evaluation Log
 # Purpose: Gemini proposes → Claude evaluates → accepted/rejected with reason
 # Format: same as chatgpt_reviews.md
-# Last updated: 2026-03-27
+# Last updated: 2026-03-28
 
 ---
 
@@ -510,3 +510,57 @@ Lean prompts work because less surface area for error, not "dilution."
 4. Once asked: move response into a new REVIEW block
 
 Rule: Gemini = stress-tester. Claude = filter + integrator. This file = why we built it this way.
+
+
+---
+
+## INSIGHT — Multi-Agent Architecture is a Prompt Engineering Problem (2026-03-28)
+
+**Origin:** B2 (STATE_PATH) research session — 3 models gave 3 different answers, human adjudicated.
+
+### What happened
+- Perplexity Sonnet: state inside .agent/ (good answer)
+- ChatGPT o4: same + one extra guard (additive)
+- Gemini 2.5 Pro: opposite — state outside memory/{slug}/ (contradicted both, but RIGHT for our constraints)
+- Claude: adjudicated manually → Gemini wins because of git clean -fd rollback rule
+
+### The insight
+Multi-agent "debate" architecture (4 agents arguing) is:
+- Expensive (4 API calls vs 1)
+- Non-deterministic (models contradict each other)
+- Still requires human adjudication to resolve conflicts
+- NOT autonomous
+
+The value wasn't the 3 models. The value was the PROCESS:
+  bug described → failure modes found → production systems checked → verdict for OUR constraints → spec written
+
+That process = a prompt engineering problem, not a multi-agent problem.
+
+### Locked decision
+One DeepSeek call with a structured prompt:
+  1. Here is the bug
+  2. What are the failure modes?
+  3. What do production systems do?
+  4. What is the verdict for OUR specific constraints?
+  5. Write the spec.
+
+Same reasoning. No arguments. No adjudication. One call.
+
+### Training data implication
+These research sessions (bug + 3-model research + adjudication + final spec) =
+the real LoRA training set. Not accepted patches — accepted ARCHITECTURAL DECISIONS with reasoning.
+
+Format:
+  input:  bug description + system constraints
+  <think>: the research + failure mode analysis + production system comparison
+  output: the final spec (exact format of v41_creation_fixes.md)
+
+This trains DeepSeek to reason like a staff engineer, not just autocomplete code.
+Gate: same as LoRA gate — 50 real-project entries with <think> blocks.
+
+### Why this matters
+memory.jsonl today = accepted patches (code level)
+This training set = accepted architectural decisions (system design level)
+Combined = model that can both DESIGN and BUILD
+
+That is the real moat. Nobody else has this training data.
