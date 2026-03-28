@@ -511,7 +511,10 @@ def run_loop(
         if not state.plan:
             log.info("orchestrator.loop.calling_agent_y", reason="plan_empty")
             try:
-                tasks = plan_goal(goal=state.goal, state=state)
+                # FIX-5: read context.md so Agent-Y knows what's already built on resume
+                from phase3.project_context import read_context
+                existing_context = read_context(repo_path)
+                tasks = plan_goal(goal=state.goal, state=state, existing_context=existing_context)
                 state = state.model_copy(update={"plan": tasks})
                 save_state(state)
                 log.info("orchestrator.loop.plan_created", tasks=len(tasks))

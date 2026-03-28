@@ -208,7 +208,7 @@ class TestRunLoopAgentY:
         plan_called = {"n": 0}
         mock_tasks = [_make_task(patch_order=[])]
 
-        def mock_plan_goal(goal, state):
+        def mock_plan_goal(goal, state, existing_context=""):
             plan_called["n"] += 1
             return mock_tasks
 

@@ -382,13 +382,15 @@ Required JSON schema:
 }"""
 
 
-def plan_goal(goal: str, state: SharedState) -> list[Task]:
+def plan_goal(goal: str, state: SharedState, existing_context: str = "") -> list[Task]:
     """
     Plan a goal into ordered Tasks using deepseek-reasoner.
 
     Args:
-        goal:  The high-level goal to plan.
-        state: Current SharedState (provides project context).
+        goal:             The high-level goal to plan.
+        state:            Current SharedState (provides project context).
+        existing_context: Contents of .agent/context.md — injected on resume so
+                          Agent-Y knows what's already built. Empty on first run.
 
     Returns:
         Parsed list[Task] with validated acceptance criteria (min 3 cases each).
@@ -406,9 +408,16 @@ def plan_goal(goal: str, state: SharedState) -> list[Task]:
 
     client = OpenAI(api_key=_get_api_key(), base_url="https://api.deepseek.com")
 
+    # FIX-5: inject existing context on resume so Agent-Y doesn't restart from scratch
+    context_block = (
+        f"\n\n## What has already been built\n{existing_context}\n"
+        "Continue from where the project left off. Do NOT recreate completed tasks."
+    ) if existing_context.strip() else ""
+
     user_prompt = (
         f"Project: {state.project_slug}\n"
-        f"Goal: {goal}\n\n"
+        f"Goal: {goal}"
+        f"{context_block}\n\n"
         "Break this goal into ordered tasks. "
         "Return ONLY the JSON object starting with {. No markdown. No explanation."
     )

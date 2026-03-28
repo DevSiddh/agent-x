@@ -1,10 +1,10 @@
 # NEXT_SESSION — read this first, skip BRIEFING.md unless unclear
 # Updated: 2026-03-28
 
-Step:     FIX-5
-Files:    phase3/orchestrator.py → run_loop(), agent_y/reasoner.py → reason()
-Read:     docs/prompts/v41_creation_fixes.md → FIX-5 section only
-Note:     FIX-5 = plan_goal() ignores context.md on resume — read_context() already exists in project_context.py
+Step:     FIX-6
+Files:    phase3/orchestrator.py → run_loop() + run_once() failure path
+Read:     docs/prompts/v41_creation_fixes.md → FIX-6 section only
+Note:     FIX-6 = replan() never fires (streak==2 just logs+returns) + fires blind (empty failed_diff)
 Branch:   agent-x/fix-step0
 Tests:    python -m pytest tests/ -q  (657 must pass before touching anything)
 
@@ -20,6 +20,9 @@ Last session (2026-03-28):
   - SCHEMA FIX — AcceptanceCriteria min_length relaxed to 0, Task validator enforces
     min 3 cases for impl tasks only (scaffold+requirements exempt)
   - AUDIT PASSED — smoke-calc: T0 scaffold ✓ T1 requirements ✓ T2 impl ✓ 3 tests pass
+  - FIX-5 DONE — plan_goal() now accepts existing_context param, run_loop() passes
+    read_context(repo_path) on resume, Agent-Y gets "what's already built" block
+  - test mock updated to accept existing_context kwarg
   - 657 tests passing
 
 Queue after FIX-2:
