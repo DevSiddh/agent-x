@@ -146,9 +146,9 @@ class TestExecuteFileOps:
         fake_content = "def add(a, b):\n    return a + b\n"
 
         with patch("phase3.orchestrator._call_deepseek", return_value=fake_content):
-            result = _execute_file_ops(task, repo)
+            ok, content = _execute_file_ops(task, repo)
 
-        assert result is True
+        assert ok is True
         assert (repo / "src" / "add.py").exists()
         assert "def add" in (repo / "src" / "add.py").read_text()
 
@@ -157,9 +157,9 @@ class TestExecuteFileOps:
         task = _make_task(patch_order=["src/add.py"])
 
         with patch("phase3.orchestrator._call_deepseek", return_value=""):
-            result = _execute_file_ops(task, repo)
+            ok, content = _execute_file_ops(task, repo)
 
-        assert result is False
+        assert ok is False
 
     def test_injects_hint_into_prompt(self, tmp_path):
         repo = _make_git_repo(tmp_path)
@@ -180,8 +180,8 @@ class TestExecuteFileOps:
         task = _make_task(patch_order=["src/add.py"])
         fake_content = "def add(a, b):\n    return a + b\n"
         with patch("phase3.orchestrator._call_deepseek", return_value=fake_content):
-            result = _execute_file_ops(task, repo)
-        assert result is True
+            ok, content = _execute_file_ops(task, repo)
+        assert ok is True
 
 
 # ---------------------------------------------------------------------------

@@ -25,7 +25,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from agent_y.reasoner import plan_goal
+from agent_y.reasoner import plan_goal, replan
 from agent_y.retrospective import generate_skill
 from agent_y.schemas import SharedState, Task, TaskAction
 from phase2.executor.runner import RunResult, apply_patch, rollback, write_file
@@ -101,9 +101,9 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     state = mark_in_progress(state, task.task_id)
     save_state(state)
 
-    # AGENT-Y CALL RULE — streak == 2
+    # AGENT-Y CALL RULE — streak == 2: just mark failed, run_loop() handles replan
     if state.failed_task_streak == 2:
-        log.info("orchestrator.streak_2 — Agent-Y replan needed", task_id=task.task_id)
+        log.info("orchestrator.streak_2 — marking failed, replan will fire in run_loop", task_id=task.task_id)
         state = mark_failed(state, task.task_id, "streak_limit")
         save_state(state)
         return state
@@ -119,6 +119,7 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
     failed_diffs: list[str] = []
     winning_diff: str = ""
     variations_tried: int = 0
+    last_failed_content: str = ""  # FIX-6: capture for replan()
 
     # Best-of-N execution
     # Attempt 1: n=1 (deterministic)
@@ -128,7 +129,9 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
 
     for attempt_idx, _ in enumerate(attempts):
         variations_tried += 1
-        exec_ok = _execute_file_ops(task, repo_path, state.global_interfaces, skill_context)
+        exec_ok, content = _execute_file_ops(task, repo_path, state.global_interfaces, skill_context)
+        if content:
+            last_failed_content = content  # always capture last output
         if not exec_ok:
             rollback(repo_path)
             failed_diffs.append(f"attempt_{attempt_idx}: file_op_error")
@@ -149,6 +152,8 @@ def run_once(state: SharedState, repo_path: Path | None = None) -> SharedState:
 
     if not passed:
         log.warning("orchestrator.best_of_n_exhausted", task_id=task.task_id)
+        # FIX-6: store last failed content in state so run_loop() can pass to replan()
+        state = state.model_copy(update={"last_failed_diff": last_failed_content})
         state = mark_failed(state, task.task_id, "test_failure")
         state = _block_dependents(state, task.task_id)
         if used_skill_ids:
@@ -376,12 +381,17 @@ def _execute_file_ops(
     repo_path: Path,
     global_interfaces: dict[str, list[str]] | None = None,
     skill_context: str = "",
-) -> bool:
-    """Execute file operations for all files in patch_order. Returns True on success."""
+) -> tuple[bool, str]:
+    """
+    Execute file operations for all files in patch_order.
+    Returns (success, last_content) — last_content is the last DeepSeek output
+    regardless of pass/fail, so replan() has something concrete to analyse.
+    """
     # SCAFFOLD tasks: create stubs + structure, no LLM call
     if task.action == TaskAction.SCAFFOLD:
-        return _execute_scaffold(task, repo_path)
+        return _execute_scaffold(task, repo_path), ""
 
+    last_content = ""
     for file_str in task.patch_order:
         file_path = repo_path / file_str
         # Trust the task's declared action; only fall back to FILE_EDIT if unspecified
@@ -392,9 +402,10 @@ def _execute_file_ops(
 
         prompt = _build_agent_x_prompt(task, file_str, action, global_interfaces, skill_context)
         content = _strip_code_fences(_call_deepseek(prompt))
+        last_content = content  # capture always — even on failure
         if not content:
             log.warning("orchestrator.file_op_failed", file=file_str, error="empty_deepseek_response")
-            return False
+            return False, last_content
 
         if action == TaskAction.WRITE_FILE:
             result = write_file(file_path, content, repo_path)
@@ -403,8 +414,8 @@ def _execute_file_ops(
 
         if not result.success:
             log.warning("orchestrator.file_op_failed", file=file_str, error=result.error)
-            return False
-    return True
+            return False, last_content
+    return True, last_content
 
 
 def _uv_available() -> bool:
@@ -528,6 +539,39 @@ def run_loop(
         except Exception as exc:
             log.error("orchestrator.loop.exception", iteration=iteration, error=str(exc))
             continue
+
+        # FIX-6: replan trigger — fires when streak hits 2
+        # run_once() marks task failed but leaves remaining tasks pending
+        # We detect streak==2 here and call replan() with captured failed content
+        if state.failed_task_streak == 2:
+            failed_task = next(
+                (t for t in state.plan if t.status == "failed"), None
+            )
+            if failed_task:
+                log.info("orchestrator.loop.replan_trigger", task_id=failed_task.task_id)
+                try:
+                    replan_resp = replan(
+                        state=state,
+                        failed_task=failed_task,
+                        failure_type="test_failure",
+                        error_output="",
+                        failed_diff=state.last_failed_diff,
+                        thompson_note="",
+                    )
+                    # Replace remaining pending tasks with surgical sub-tasks
+                    new_plan = [
+                        t for t in state.plan
+                        if t.status not in ("pending", "blocked")
+                    ] + replan_resp.tasks
+                    state = state.model_copy(update={
+                        "plan": new_plan,
+                        "failed_task_streak": 0,
+                        "last_failed_diff": "",
+                    })
+                    save_state(state)
+                    log.info("orchestrator.loop.replan_done", new_tasks=len(replan_resp.tasks))
+                except Exception as exc:
+                    log.error("orchestrator.loop.replan_failed", error=str(exc))
     else:
         log.info("orchestrator.loop.max_iterations", max_iterations=max_iterations)
 

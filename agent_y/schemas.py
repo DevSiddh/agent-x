@@ -102,6 +102,7 @@ class SharedState(BaseModel):
     plan: list[Task]
     current_task_id: str | None = None
     failed_task_streak: int = 0
+    last_failed_diff: str = ""   # FIX-6: last DeepSeek output that failed — passed to replan()
     global_interfaces: dict[str, list[str]] = {}
     artifacts: list[ArtifactEntry] = []
     github_repo: str = ""      # e.g. "DevSiddh/agent-x" — for PR comments
