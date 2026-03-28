@@ -256,12 +256,20 @@ def resume_project(token: str, chat_id: str, project_slug: str, user_reply: str)
         # Sub-case A: spec collection complete → parse menu reply → launch build
         original_goal = pending["goal"]
         category = pending.get("category", "general")
+
+        # Filter out conversational follow-ups — not spec replies
+        _noise = {"are u building", "are you building", "ok", "yes", "no",
+                  "ok go", "got it", "sure", "cool", "great", "sounds good"}
+        if user_reply.strip().lower().rstrip("?!.") in _noise:
+            _reply(token, chat_id, "▶️ Yes, building now... I'll notify you when done.")
+            return
+
         parsed_specs = parse_spec_reply(user_reply, category)
         full_goal = apply_universal_template(
             f"{original_goal}\n\nUser specs: {parsed_specs}"
         )
+        # Clear BEFORE reply — prevents re-routing on follow-up messages
         _clear_pending_spec()
-        # Clear blocked status immediately so next message isn't routed here
         try:
             from phase3.project_context import update_registry_status
             update_registry_status(project_slug, "active")
@@ -462,8 +470,19 @@ def handle_text(token: str, chat_id: str, text: str) -> None:
     blocked = get_blocked_project()
     if blocked:
         resume_project(token, chat_id, blocked["project_slug"], text)
-    else:
-        start_new_project(token, chat_id, text)
+        return
+
+    # Filter conversational noise — don't start a project on "ok", "yes", "are u building?" etc.
+    _noise_replies = {
+        "ok", "yes", "no", "sure", "cool", "great", "thanks", "got it",
+        "are u building", "are you building", "ok go", "sounds good", "nice",
+        "ok done", "done", "ok cool", "k", "👍", "✅",
+    }
+    if text.strip().lower().rstrip("?!. ") in _noise_replies or len(text.strip()) < 5:
+        _reply(token, chat_id, "Send me a project idea and I'll build it for you! 🚀")
+        return
+
+    start_new_project(token, chat_id, text)
 
 
 def handle_document(token: str, chat_id: str, document: dict) -> None:
