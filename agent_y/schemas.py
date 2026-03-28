@@ -87,10 +87,11 @@ class Task(BaseModel):
     patch_order: list[str] = []
     acceptance_criteria: AcceptanceCriteria
     depends_on: list[str] = []
-    status: Literal["pending", "in_progress", "completed", "failed", "blocked"] = "pending"
+    status: Literal["pending", "in_progress", "completed", "failed", "blocked", "skipped"] = "pending"
     failed_attempts: int = 0
     variations_tried: int = 0  # Best-of-N: how many variants attempted before pass
     hint: str = ""  # optional constraint injected into Agent-X prompt
+    required: bool = True  # FIX-11: False = optional, skipped on timeout
 
 
 class SharedState(BaseModel):
@@ -107,6 +108,9 @@ class SharedState(BaseModel):
     artifacts: list[ArtifactEntry] = []
     github_repo: str = ""      # e.g. "DevSiddh/agent-x" — for PR comments
     pr_number: int | None = None  # set after PR is opened
+    # FIX-11: plan checkpoint
+    plan_approved: bool = False
+    interrupt_queue: list[str] = []  # FIX-12: pending Telegram messages between tasks
 
 
 class ReplanAnalysis(BaseModel):

@@ -416,8 +416,29 @@ def _cmd_show(token: str, chat_id: str, args: str) -> None:
 # Message handlers
 # ---------------------------------------------------------------------------
 
+def _pipe_to_interrupt_queue(text: str) -> None:
+    """
+    FIX-11/12: Append every incoming Telegram message to state.interrupt_queue.
+    plan_checkpoint and interrupt_handler both drain from this queue.
+    Never raises.
+    """
+    try:
+        from phase3.state_manager import load_state, save_state
+        state = load_state()
+        if state is not None:
+            new_queue = list(state.interrupt_queue) + [text]
+            save_state(state.model_copy(update={"interrupt_queue": new_queue}))
+            log.info("telegram_bot.queued_interrupt", text=text[:60])
+    except Exception as exc:
+        log.warning("telegram_bot.interrupt_queue_error", error=str(exc))
+
+
 def handle_text(token: str, chat_id: str, text: str) -> None:
     """State-aware router: commands → handler, blocked → resume, else → new project."""
+    # FIX-11: pipe ALL messages to interrupt_queue for checkpoint + mid-task interrupt
+    if not text.startswith("/"):
+        _pipe_to_interrupt_queue(text)
+
     if text.startswith("/"):
         parts = text.split(maxsplit=1)
         cmd = parts[0].lower()

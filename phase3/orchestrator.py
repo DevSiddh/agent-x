@@ -670,6 +670,14 @@ def run_loop(
             except Exception as exc:
                 log.error("orchestrator.loop.plan_goal_failed", error=str(exc))
                 break
+
+            # FIX-11: plan checkpoint — show plan to user before first task
+            if not state.plan_approved:
+                from phase3.plan_checkpoint import run_checkpoint
+                run_checkpoint(state.plan, state)
+                state = state.model_copy(update={"plan_approved": True})
+                save_state(state)
+                log.info("orchestrator.loop.plan_checkpoint_done")
             continue
 
         try:
