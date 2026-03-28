@@ -1,11 +1,10 @@
 # NEXT_SESSION — read this first, skip BRIEFING.md unless unclear
 # Updated: 2026-03-28
 
-Step:     FIX-7
-Files:    phase3/orchestrator.py → FILE_EDIT branch in _execute_file_ops()
-Read:     docs/prompts/v41_creation_fixes.md → FIX-7 section only
-Note:     FIX-7 = file_edit sends raw LLM text not unified diff → always fails
-          Fix: read original → DeepSeek returns full new content → difflib generates diff → apply_patch
+Step:     FIX-8
+Files:    phase3/orchestrator.py → _execute_file_ops() — audit every path construction
+Read:     docs/prompts/v41_creation_fixes.md → FIX-8 section only
+Note:     FIX-8 = resolve_safe_path() missing on some writes — security audit + targeted additions
 Branch:   agent-x/fix-step0
 Tests:    python -m pytest tests/ -q  (657 must pass before touching anything)
 
@@ -23,6 +22,8 @@ Last session (2026-03-28):
   - AUDIT PASSED — smoke-calc: T0 scaffold ✓ T1 requirements ✓ T2 impl ✓ 3 tests pass
   - FIX-5 DONE — plan_goal() now accepts existing_context param, run_loop() passes
     read_context(repo_path) on resume, Agent-Y gets "what's already built" block
+  - FIX-7 DONE — FILE_EDIT fixed: DeepSeek returns full new content → _make_unified_diff()
+    generates diff via difflib → apply_patch() applies it. Empty diff = no-op (not error).
   - FIX-6 DONE — replan() now fires correctly:
     * run_once() streak==2 path just marks failed (no longer returns early)
     * _execute_file_ops() returns (bool, last_content) tuple — content stored in state.last_failed_diff

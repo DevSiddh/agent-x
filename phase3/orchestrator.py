@@ -410,12 +410,36 @@ def _execute_file_ops(
         if action == TaskAction.WRITE_FILE:
             result = write_file(file_path, content, repo_path)
         else:
-            result = apply_patch(content, repo_path)
+            # FIX-7: DeepSeek returns full new content, not a diff.
+            # Generate unified diff ourselves — deterministic and reliable.
+            original = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
+            diff = _make_unified_diff(original, content, file_str)
+            if not diff:
+                # No changes — not an error, treat as success
+                log.info("orchestrator.file_edit_no_diff", file=file_str)
+                continue
+            result = apply_patch(diff, repo_path)
 
         if not result.success:
             log.warning("orchestrator.file_op_failed", file=file_str, error=result.error)
             return False, last_content
     return True, last_content
+
+
+def _make_unified_diff(original: str, new_content: str, file_str: str) -> str:
+    """
+    Generate a unified diff from original → new_content using difflib.
+    Returns empty string if no changes (idempotent write).
+    """
+    import difflib
+    orig_lines = original.splitlines(keepends=True)
+    new_lines  = new_content.splitlines(keepends=True)
+    diff = list(difflib.unified_diff(
+        orig_lines, new_lines,
+        fromfile=f"a/{file_str}",
+        tofile=f"b/{file_str}",
+    ))
+    return "".join(diff)
 
 
 def _uv_available() -> bool:
