@@ -12,11 +12,13 @@
   Fails → fix what it reports before touching anything
 
 ## SESSION START PROTOCOL
-1. Read @docs/BRIEFING.md         → full picture in one file, no code reading needed
-2. Read @docs/session_prompts.md  → find next PENDING step
+1. Read @NEXT_SESSION.md          → fast path: exact step + file + branch (10 lines)
+   If NEXT_SESSION.md is clear → skip to step 3
+   If unclear → read @docs/BRIEFING.md for full picture
+2. Read that FIX section in docs/prompts/v41_creation_fixes.md
 3. Ask user "Ready to start FIX-N?" → wait for confirmation
-4. Read that FIX section in @docs/prompts/v41_creation_fixes.md
-5. Execute → pytest after every file → update progress.md → STOP
+4. Execute → pytest after every file → update progress.md → STOP
+5. Session end → update NEXT_SESSION.md with next step before closing
 
 ## CI/CD PROTECTION (3 layers)
 Layer 1 — pre-commit hook  : blocks .env commits + hardcoded secrets

@@ -37,12 +37,12 @@
 | ✅ DONE | end-to-end | drop brief.yaml → run_loop() on VPS → working repo out | DONE — 2026-03-26 |
 | ✅ DONE | BM25 | rank_bm25 installed — 657 tests passing | DONE — 2026-03-27 |
 | ✅ DONE | viva-prep | Gemini Q1/Q2/Q3 answered — Reviews 3+4+5 locked | DONE — 2026-03-27 |
-| 🔴 NEXT | FIX-1 | global_interfaces injected into _build_agent_x_prompt() | PENDING |
-| 🔴 | FIX-2 | pip install before pytest in _run_tests() | PENDING |
+| 🔴 NEXT | FIX-1 | _run_ast_mapper per-file scope + global_interfaces injection + SkillVault wiring in _build_agent_x_prompt() | PENDING |
+| 🔴 | FIX-2 | pip install + Surgical Pytest (-x --ff + timeout tiers) in _run_tests() | PENDING |
 | 🔴 | FIX-3 | scaffold task T0 — stub-driven, topological order | PENDING |
 | 🟡 | FIX-4 | requirements.txt task in CREATION_SYSTEM_PROMPT | PENDING |
 | 🟡 | FIX-5 | context.md injected into plan_goal() on resume | PENDING |
-| 🟡 | FIX-6 | replan() receives actual failed_diff | PENDING |
+| 🟡 | FIX-6 | add replan trigger to run_loop() + capture + pass failed_diff | PENDING |
 | 🟠 | FIX-7 | file_edit generates real unified diff via difflib | PENDING |
 | 🟠 | FIX-8 | resolve_safe_path() audit — every write in _execute_file_ops | PENDING |
 | 🟠 | FIX-9 | placeholder detection before write_file() | PENDING |
@@ -54,6 +54,8 @@
 | 🔵 | FIX-14 | Multi-language backend — language field in brief.yaml, tier warnings | PENDING |
 | ⚪ | FIX-15 | Domain Splintering (Topological Sort) — domains[], DAG validation, two-stage Agent-Y, context isolation | GATED: after FIX-9 done |
 | ⚪ | FIX-16 | Private SDK + Perplexity deep research — niche pip packages, .pyi stub injection, GitHub Packages | GATED: 10 real projects |
+| 🔵 | FIX-17 | Dynamic test generation — TEST_FRAMEWORK_MAP, conftest.py per project_type, framework injected into Agent-Y/X prompt | GATED: after FIX-3 done |
+| 🔵 | FIX-18 | Agentic RAG for creation mode — phase3/creation_context_builder.py adapts existing context_builder (file read + RAG + web fallback) into retry prompt | GATED: after FIX-9 done |
 
 ---
 

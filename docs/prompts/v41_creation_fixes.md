@@ -26,7 +26,7 @@ The ceiling today:
 ```
 TIER 1 — Breaks every real project (highest priority)
   FIX-1: L2/L9  global_interfaces not injected into prompt     (5 lines)
-  FIX-2: L3     pip install missing before pytest               (10 lines)
+  FIX-2: L3+G   pip install + Surgical Pytest (-x --ff + timeout tiers) (~15 lines)
   FIX-3: A1     no scaffold task T0 — blank directory start     (30 lines)
 
 TIER 2 — Breaks mid-complexity projects
@@ -38,6 +38,10 @@ TIER 3 — Breaks advanced features
   FIX-7: A5     file_edit sends raw text not unified diff       (30 lines)
   FIX-8: B4     resolve_safe_path() missing on some writes      (audit)
   FIX-9: L5     placeholder code not detected before pytest     (15 lines)
+
+TIER 4 — Unlocks Devin-like test quality + diagnostic reasoning (gated: after FIX-3/FIX-9)
+  FIX-17: dynamic test generation — TEST_FRAMEWORK_MAP + conftest.py per project_type (~80 lines)
+  FIX-18: diagnostic reasoning — read_file/grep tools before fix + reasoning trace in memory.jsonl (~60 lines)
 
 REJECTED — do not build
   Async API calls  violates VPS sequential constraint (1 vCPU)
@@ -51,39 +55,63 @@ REJECTED — do not build
 
 ---
 
-### FIX-1 — global_interfaces never injected
-**Files:** phase3/orchestrator.py → _build_agent_x_prompt()
-**Source:** Runnable L2 + L9
+### FIX-1 — global_interfaces never injected + _run_ast_mapper wrong scope + SkillVault disconnected
+**Files:** phase3/orchestrator.py → _build_agent_x_prompt() + _run_ast_mapper()
+**Source:** Runnable L2 + L9 + 2026-03-28 audit
 
-**What is broken:**
-ast_mapper.py runs after every task and extracts class/function signatures into
-state.global_interfaces. The data is there. But _build_agent_x_prompt() never reads it.
+**What is broken — 3 connected gaps in the same function chain:**
+
+Gap A — _run_ast_mapper() maps wrong scope:
+_run_ast_mapper() calls map_repo(fp.parent) — maps the ENTIRE parent directory, not just the file.
+If task touches models.py and routes.py (same dir): full directory skeleton stored twice under
+two different keys. By task 8, global_interfaces contains duplicate bloated data.
+Fix: call _extract_signatures() directly on the specific file, not map_repo() on its parent.
+
+Gap B — global_interfaces never injected into prompt:
+After Gap A is fixed, global_interfaces has correct per-file signatures.
+But _build_agent_x_prompt() never reads state.global_interfaces.
 Agent-X writes every task with zero knowledge of what previous tasks built.
+Fix: format global_interfaces as a text block, append to prompt.
 
-Example failure:
+Example failure without FIX-1:
 - Task 1 writes models.py → class User(Base), class Todo(Base)
-- Task 2 writes routes.py → tries to import User but guesses wrong module path
+- Task 2 writes routes.py → guesses wrong import path for User
 - pytest: ImportError — even though models.py exists and is correct
 
-**Why it is a 5-line fix:**
-The data exists in state.global_interfaces (a dict: filename → list of signatures).
-_build_agent_x_prompt() already receives the task and state.
-The only missing piece: format the dict as a text block and append it to the prompt.
+Gap C — SkillVault initialized but never used:
+orchestrator.py creates SkillVault() and sets used_skill_ids = [] but nothing appends to it.
+vault.get_context_block(goal) is never called — zero reusable patterns reach Agent-X.
+Fix: call vault.get_context_block(task.description) in _build_agent_x_prompt(),
+inject result as a Skills section. If vault empty (first run): nothing added, zero cost.
 
-**What changes:**
-- Only _build_agent_x_prompt() is touched
-- No schema changes, no new files, no new logic
-- If global_interfaces is empty (Task 1): nothing added — zero cost
+**What changes — ~15 lines, orchestrator.py only:**
 
-**Impact:** Every Task 2+ goes from blind to informed. Biggest ROI of all fixes.
+Part 1 — fix _run_ast_mapper() (~5 lines):
+Replace map_repo(fp.parent) with direct per-file signature extraction.
+Result: global_interfaces = {"models.py": ["class User(Base)", "class Todo(Base)"], ...}
+
+Part 2 — inject global_interfaces into _build_agent_x_prompt() (~5 lines):
+If global_interfaces non-empty: format as "## What exists so far" block → append to prompt.
+If empty (Task 1): skip — zero cost, no empty section injected.
+
+Part 3 — wire SkillVault.get_context_block() into _build_agent_x_prompt() (~3 lines):
+Call vault.get_context_block(task.description) → if non-empty → append as "## Reusable patterns".
+SkillVault already exists, already works, already has BM25 search. Just not called.
+
+NOTE — RUN_TESTS dead enum:
+TaskAction.RUN_TESTS exists in schemas.py but Agent-Y never emits it and orchestrator
+never handles it. No action needed. Document as dead value — remove at v4.2 cleanup.
+
+**Impact:** Every Task 2+ goes from triple-blind (no interfaces, no skills, no patterns)
+to triple-informed. Biggest ROI of all fixes. Size grows 5 → ~15 lines, still Tier 1.
 
 ---
 
-### FIX-2 — pip install missing before pytest
+### FIX-2 — pip install missing before pytest + Surgical Pytest (merged FIX-19)
 **Files:** phase3/orchestrator.py → _run_tests()
-**Source:** Runnable L3
+**Source:** Runnable L3 + Gemini 2026-03-28
 
-**What is broken:**
+**What is broken (Part 1 — install):**
 _run_tests() calls pytest immediately after writing files.
 If the project imports fastapi, sqlalchemy, httpx — they must be installed first.
 Currently: no install step exists. Result: ModuleNotFoundError from pytest import phase,
@@ -96,12 +124,82 @@ Any real project with third-party imports: fails at import time before tests run
 FIX-3 (scaffold) will generate requirements.txt. FIX-2 installs it.
 Both are needed together for real projects.
 
-**What changes:**
-- Only _run_tests() is touched
-- Add: if (repo_path / "requirements.txt").exists() → run uv pip install before pytest
-- Use uv always (VPS rule: global cache, no venv bloat per project)
-- Fall back to pip if uv not found (portability)
-- Log the install step
+**What is broken (Part 2 — Surgical Pytest):**
+_run_tests() already targets the task's test file when one is in files_to_touch.
+But it is missing three things:
+1. `-x` (fail fast): pytest runs all failures even when the first is enough — wastes time + floods logs
+2. `--ff` (failed first): on retry, pytest does not prioritise the test that just failed
+3. Full suite gate: tasks with no test file fall back to `pytest .` (full repo) — wrong trigger point
+
+Without these: a 3-retry bug on a project with 40 tests takes minutes per retry instead of seconds.
+The feedback loop collapses on any real project.
+
+**NOTE — existing code already does file-level targeting:**
+```python
+# orchestrator.py:343 — already exists, not broken, just incomplete
+test_files = [f for f in task.files_to_touch if f.startswith("test_")]
+if test_files:
+    pytest_target = str(repo_path / test_files[0])  # ← file-level, correct
+else:
+    pytest_target = str(repo_path)  # ← falls back to full repo — fix this
+```
+
+**What changes — _run_tests() only, ~15 lines total:**
+
+```python
+def _run_tests(repo_path: Path, task: Task) -> bool:
+    import os
+    # Part 1 — install dependencies before running any tests
+    req = repo_path / "requirements.txt"
+    if req.exists():
+        installer = "uv" if _uv_available() else "pip"
+        cmd = [installer, "pip", "install", "-r", str(req)] if installer == "uv" \
+              else [sys.executable, "-m", "pip", "install", "-r", str(req)]
+        subprocess.run(cmd, cwd=repo_path, capture_output=True, check=False)
+
+    # Part 2 — Surgical Pytest: 3-tier targeting
+    test_files = [f for f in task.files_to_touch if f.startswith("test_")]
+    if test_files:
+        # Tier 1 — micro-loop: file-level, fail fast, failed first
+        target = str(repo_path / test_files[0])
+        timeout = int(os.environ.get("TEST_TIMEOUT_FILE", "30"))
+        cmd = [sys.executable, "-m", "pytest", target, "-x", "--ff", "--tb=short", "-q"]
+    else:
+        # No test file in this task (scaffold, requirements.txt, config)
+        # Skip pytest — next task's test will catch issues
+        # Full suite runs only at iteration audit (FIX-13 trigger)
+        return True
+
+    result = subprocess.run(cmd, cwd=repo_path, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        log.warning("orchestrator.test_failed",
+                    stdout=result.stdout[-600:], stderr=result.stderr[-200:])
+    return result.returncode == 0
+```
+
+**.env.example additions:**
+```
+TEST_TIMEOUT_FILE=30      # seconds per file-level test run (retries stay fast)
+TEST_TIMEOUT_FULL=600     # seconds for full suite at iteration audit (FIX-13)
+```
+
+**3-tier structure — how it maps to the full architecture:**
+```
+Tier 1 — Micro-loop (this fix):
+  file-level targeting + -x --ff → retries take seconds not minutes
+  already implemented for targeting; adding fail-fast flags only
+
+Tier 2 — Domain merge (FIX-15):
+  after domain completes → run pytest tests/domain_a/ before moving to Domain B
+  FIX-15 already plans this; _run_tests() timeout = TEST_TIMEOUT_FILE × domain_size
+
+Tier 3 — Full suite release (FIX-13):
+  after ALL tasks complete → iteration audit triggers pytest . with TEST_TIMEOUT_FULL
+  only time the full suite runs — not during retries, not between tasks
+```
+
+**Why NOT pytest-xdist (parallel):**
+2GB VPS. Parallel workers + database fixtures = OOM crash. Sequential only. Locked.
 
 **Constraint locked by VPS rules:**
 Use uv for all dependency management. No per-project venv. Global cache only.
@@ -201,23 +299,45 @@ read_context() already exists in project_context.py — zero new infrastructure.
 
 ---
 
-### FIX-6 — replan() fires with empty context
-**Files:** phase3/orchestrator.py → run_once() failure path
-**Source:** Runnable L10
+### FIX-6 — replan() never fires + fires with empty context when it does
+**Files:** phase3/orchestrator.py → run_loop() + run_once() failure path
+**Source:** Runnable L10 + 2026-03-28 audit
 
-**What is broken:**
-When failed_task_streak hits 2, replan() is triggered.
-replan() takes a failed_diff parameter — what Agent-X last wrote that failed.
-The orchestrator never passes this. replan() gets empty string.
-Agent-Y replans without knowing what was tried → same plan → same failure → infinite loop.
+**What is broken — 2 layers:**
 
-This is the most dangerous gap: it looks like the system is working (replan fires, new plan generated)
-but the replan contains no real information and produces identical output.
+Layer A — replan() is never triggered (the real bug):
+When failed_task_streak hits 2, run_once() does this:
+  log.info("orchestrator.streak_2 — Agent-Y replan needed")  ← just a log message
+  state = mark_failed(state, task.task_id, "streak_limit")
+  return state                                              ← returns, replan never called
 
-**What changes:**
-_execute_file_ops(): capture the last DeepSeek output even on failure.
-Return it alongside the bool success flag.
-run_once() failure path: pass last_failed_content to replan().
+run_loop() only calls plan_goal() when plan is EMPTY. After streak==2, plan is NOT empty
+(there are still pending tasks). So plan_goal() is never triggered either.
+
+Result: streak hits 2 → task marked failed → run_once() returns → run_loop() calls
+run_once() again → next pending task ALSO immediately hits streak==2 check → also
+marked failed without running → all remaining tasks cascade-fail. Build dies silently.
+
+Layer B — when replan fires, failed_diff is empty:
+replan() accepts failed_diff: str — what Agent-X last wrote that failed.
+Even after fixing Layer A, the orchestrator captures no failed content to pass.
+Agent-Y replans blind → same plan → same failure → true infinite loop.
+
+This is the most dangerous gap: it LOOKS like replan fires (log says so) but nothing
+actually happens. The build silently dies or loops forever.
+
+**What changes — 2 parts:**
+
+Part 1 — add replan trigger to run_loop() (~8 lines):
+After run_once() returns, check if failed_task_streak == 2.
+If yes: call replan() with last_failed_content → replace remaining plan tasks.
+Reset failed_task_streak to 0 after replan so new sub-tasks get fresh attempts.
+Max replan count = 2 (already locked in hard rules).
+
+Part 2 — capture failed content in run_once() (~5 lines):
+_execute_file_ops(): capture last DeepSeek output even on failure.
+Surface it back through run_once() return value or state field.
+run_loop() passes it to replan() in Part 1.
 
 replan() signature already accepts failed_diff. The data just never reaches it.
 
@@ -770,7 +890,7 @@ Con 2: Integration failure (semantic vs syntax mismatch)
   Rule: orchestrator NEVER auto-edits a completed domain without user instruction.
   FIX-12 interrupt handler already has the pause/resume mechanism — just wire it here.
 
-**Prerequisite:** FIX-1 (AST mapper) must exist — without it domains cannot merge.
+**Prerequisite:** ast_mapper.py already exists (phase2/tools/ast_mapper.py). FIX-1 must be done first — it fixes _run_ast_mapper() scope and injects global_interfaces. Without FIX-1, domain signatures cannot be passed between domains correctly.
 **Size:** ~75 lines total — outer domain loop (~30) + DAG validation (~15) + integration failure flow (~30 wired to FIX-12).
 
 ---
@@ -836,3 +956,161 @@ agentxyz-telegram-core   → python-telegram-bot wrapper (already thin — low p
 
 **Size (when gate met):** ~30 lines orchestrator + manifest.yaml extension + stub files per domain.
 **Not a code change until 10 real projects prove which domains repeat.**
+
+---
+
+### FIX-17 — Dynamic Test Generation
+**Origin:** 2026-03-28 session — Devin comparison, dynamic tests per language + project type
+**Gate:** After FIX-3 (scaffold) is working. conftest.py is part of scaffold — needs T0 to exist first.
+
+**What is broken:**
+Agent-X writes tests but has no knowledge of which testing framework to use or what
+patterns are correct for the project type. A FastAPI project needs TestClient, not raw
+function calls. A CLI tool needs subprocess.run, not HTTP calls. A Telegram bot needs
+MockBot handler testing. Without framework guidance, Agent-X invents patterns — wrong
+imports, wrong fixtures, wrong assertion style. Tests fail at import time before any
+logic is checked.
+
+AcceptanceCriteria has the right I/O cases (what to test). The gap is HOW to write
+those tests for the correct framework and language.
+
+**What changes — four parts:**
+
+Part 1 — TEST_FRAMEWORK_MAP (phase3/test_framework.py, ~30 lines):
+```python
+TEST_FRAMEWORK_MAP = {
+    "python": {
+        "web_api":  "pytest + httpx.TestClient",
+        "cli":      "pytest + subprocess.run",
+        "bot":      "pytest + unittest.mock",
+        "data":     "pytest + pandas DataFrame assertions",
+        "default":  "pytest"
+    },
+    "nodejs": {
+        "web_api":  "jest + supertest",
+        "cli":      "jest + child_process",
+        "bot":      "jest + telegraf mock",
+        "default":  "jest"
+    },
+    "go": {
+        "web_api":  "testing.T + httptest.NewRecorder",
+        "cli":      "testing.T + os/exec",
+        "default":  "testing.T + table-driven"
+    },
+    "typescript": {
+        "web_api":  "jest + supertest + ts-jest",
+        "default":  "jest + ts-jest"
+    }
+}
+
+TEST_EXAMPLE_MAP = {
+    "python/web_api": "def test_create(client):\n    r = client.post('/todos', json={'title': 'x'})\n    assert r.status_code == 201\n    assert r.json()['title'] == 'x'",
+    "python/cli":     "def test_add():\n    r = subprocess.run(['python', 'main.py', 'add', 'x'], capture_output=True)\n    assert r.returncode == 0\n    assert 'x' in r.stdout.decode()",
+    "nodejs/web_api": "it('POST /todos', async () => {\n    const r = await request(app).post('/todos').send({title: 'x'})\n    expect(r.status).toBe(201)\n    expect(r.body.title).toBe('x')\n})",
+    "go/web_api":     "func TestCreate(t *testing.T) {\n    w := httptest.NewRecorder()\n    r := httptest.NewRequest('POST', '/todos', body)\n    router.ServeHTTP(w, r)\n    assert.Equal(t, 201, w.Code)\n}"
+}
+```
+Key: `language + "/" + project_type`. Falls back to `language/default` if no exact match.
+
+Part 2 — conftest.py in Scaffold (FIX-3 extension, ~20 lines per project_type):
+T0 scaffold generates conftest.py / jest.config.js / testmain_test.go based on
+project_type + language detected from brief.yaml goal:
+```
+python/web_api  → conftest.py: TestClient fixture + in-memory SQLite fixture
+python/bot      → conftest.py: MockBot fixture + patch decorators
+nodejs/web_api  → jest.config.js + beforeAll DB setup
+go/web_api      → testmain_test.go with setup/teardown
+```
+Fixtures exist before any implementation task runs. No fixture import errors possible.
+
+Part 3 — Agent-Y AcceptanceCriteria becomes framework-precise:
+test_framework string injected into CREATION_SYSTEM_PROMPT context so Agent-Y
+generates I/O cases with correct assertion style:
+```
+Without FIX-17: "create todo works"
+With FIX-17:    "POST /todos returns 201, body.title == input — use TestClient fixture"
+```
+Agent-Y prompt addition: ~5 lines injecting `test_framework` from TEST_FRAMEWORK_MAP.
+
+Part 4 — Agent-X prompt gets test example injected (FIX-1 mechanism):
+TEST_EXAMPLE_MAP lookup injected into _build_agent_x_prompt() alongside global_interfaces.
+Agent-X sees exactly what the test pattern should look like for this language + project_type.
+Zero new infrastructure — same injection point as FIX-1.
+
+**Detection (zero API cost):**
+project_type already detected by Telegram spec menu keyword matching.
+language already in SharedState from FIX-14.
+TEST_FRAMEWORK_MAP lookup = dict access, O(1).
+
+**What this unlocks:**
+```
+FastAPI project   → pytest + TestClient + SQLite fixture auto-generated
+Telegram bot      → pytest + MockBot handler tests
+CLI tool (Python) → pytest + subprocess.run pattern
+Express API       → jest + supertest endpoint tests
+Go REST API       → table-driven tests + httptest recorder
+```
+Tests are correct on first attempt. No framework import errors. No wrong assertion style.
+Retry rate on test tasks drops significantly.
+
+**Size:** ~80 lines total. No new infrastructure. One new file (test_framework.py) + scaffold extension + 2 prompt injections.
+**Done condition:** pytest passes + test that correct framework string is selected for 4 project_type + language combos.
+
+---
+
+### FIX-18 — Agentic RAG for Creation Mode (Creation Context Builder)
+**Origin:** 2026-03-28 — phase2 context_builder already does agentic RAG (reads files + fetches GitHub + BM25 retrieval + web fallback). Phase3 orchestrator never calls it. Agent-X retries blindly while intelligence sits unused in phase2.
+**Gate:** After FIX-9 (stable Agent-X, placeholder detection working).
+
+**What is broken:**
+phase2/context_builder.py already does exactly what we need:
+  Section 1 — error summary (category, keyword, affected file, bug signature)
+  Section 2 — reads the actual broken file content. Falls back to GitHub API if missing.
+  Section 3 — BM25 + TF-IDF + Thompson hybrid RAG → top 3 past fixes tagged HIGH/LOW
+  Web fallback — when RAG empty AND DependencyError/EnvironmentError → fetches StackOverflow live
+
+phase3/orchestrator.py never calls any of this. On retry:
+  Agent-X gets: "tests failed, try again" — no file content, no RAG, no diagnosis.
+  It guesses. Complex bugs (circular imports, wrong module path, schema mismatch) hit 3 retries
+  and give up — not because the fix is hard, but because Agent-X never saw the broken file.
+
+**Why NOT a new diagnostics.py:**
+context_builder.py already does: file read, GitHub fallback, BM25+TF-IDF+Thompson RAG, web fallback.
+Rebuilding it in diagnostics.py is duplication. The real fix is a 30-line adapter that plugs
+phase3 into the existing agentic RAG. No new tools. No new logic. Just a different input format.
+
+**What changes — new file + schema extension:**
+
+Part 1 — phase3/creation_context_builder.py (NEW, ~30 lines):
+
+Adapts context_builder.build_context() to creation mode inputs:
+
+
+Wired into orchestrator.py retry path (attempt_idx > 0 only — first attempt stays lean):
+
+
+Error type routing:
+
+
+NOTE — _classify_error_type() is NOT a new function:
+phase2/classifier/regex_pass.py already classifies error strings into DependencyError,
+ImportError, EnvironmentError, etc. creation_context_builder.py calls it directly on
+the raw pytest stdout. No new classifier needed — reuse what exists.
+
+Part 2 — Reasoning Trace in memory.jsonl (memory/memory_store.py, ~20 lines):
+Add three optional fields to MemoryEntry (written in existing finally: block):
+
+These fields ARE the <think> block for LoRA training — earned from real execution, not synthetic.
+
+**FIX-10 synergy:**
+FIX-10 adds BM25F field weighting to MemoryEngine._score_entries().
+both phase2/context_builder and phase3/creation_context_builder call find_for_rag().
+FIX-10 improves RAG precision in both pipelines simultaneously. Zero extra work.
+
+**What this unlocks:**
+
+
+**Size:** ~30 lines (down from 60). New file: phase3/creation_context_builder.py (~30 lines).
+Schema extension: ~20 lines in memory_store.py. No diagnostics.py needed.
+**Done condition:** pytest passes + test that ImportError retry injects file content + RAG results
+into prompt, memory entry written with diagnosis_steps >= 2 entries and root_cause non-empty.
