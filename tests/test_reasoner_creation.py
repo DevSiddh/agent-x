@@ -276,13 +276,24 @@ class TestSchemas:
         assert state.failed_task_streak == 0  # original unchanged
 
     def test_acceptance_criteria_min_length_enforced(self) -> None:
+        # Validation now lives on Task (not AcceptanceCriteria directly)
+        # so that scaffold/requirements tasks can have cases=[]
+        from agent_y.schemas import Task, TaskAction
         with pytest.raises(ValidationError):
-            AcceptanceCriteria(
-                target_function="add",
-                cases=[
-                    AcceptanceCase(inputs=["1"], expected="1"),
-                    AcceptanceCase(inputs=["2"], expected="2"),
-                ],
+            Task(
+                task_id="T1",
+                action=TaskAction.WRITE_FILE,
+                description="impl task with too few cases",
+                files_to_touch=["add.py", "test_add.py"],
+                patch_order=["test_add.py", "add.py"],
+                acceptance_criteria=AcceptanceCriteria(
+                    target_function="add",
+                    cases=[
+                        AcceptanceCase(inputs=["1"], expected="1"),
+                        AcceptanceCase(inputs=["2"], expected="2"),
+                    ],
+                ),
+                depends_on=[],
             )
 
     def test_acceptance_criteria_exactly_three_passes(self) -> None:

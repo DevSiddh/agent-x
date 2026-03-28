@@ -267,7 +267,17 @@ def reason(context: str, classification: ClassifierResult) -> ReasonerOutput:
 # ---------------------------------------------------------------------------
 
 CREATION_SYSTEM_PROMPT = """You are a planning engine for an autonomous software engineer.
-Break a goal into 2-4 tasks MAX. Each task must:
+
+SCAFFOLD RULE (mandatory — no exceptions):
+- ALWAYS emit T0 first with action="scaffold"
+- T0 lists ALL files the project will ever touch in files_to_touch (every .py file)
+- T0 has NO acceptance_criteria — use: {"target_function": "scaffold", "cases": []}
+- T0 has NO depends_on
+- After T0: emit tasks in TOPOLOGICAL ORDER (files with no imports first, files that import others last)
+  Example order: models.py → schemas.py → routes.py (routes imports both)
+- T0 guarantees every stub exists before any task runs — eliminates all ImportError on missing files
+
+Break a goal into 2-4 tasks MAX (after T0). Each task must:
 - Touch EXACTLY 2 files: one test file (test_*.py) and one implementation file
 - NEVER create a task with 3 or more files
 - ALWAYS include BOTH the test file AND the implementation file in the same task
@@ -292,16 +302,26 @@ Break a goal into 2-4 tasks MAX. Each task must:
 - Each file must be ≤ 150 lines
 - Group related functionality: all CRUD operations for one resource = ONE task, not 5
 
+REQUIREMENTS RULE (mandatory — no exceptions):
+- ALWAYS emit T1 with action="write_file" to create requirements.txt
+- T1 comes immediately after T0 scaffold, before any implementation task
+- T1 files_to_touch: ["requirements.txt"], patch_order: ["requirements.txt"]
+- T1 acceptance_criteria: {"target_function": "requirements", "cases": []}
+- Infer packages from the goal: FastAPI goal → fastapi, uvicorn, pydantic; Telegram → python-telegram-bot; etc.
+- Always include pytest. Always pin nothing — bare package names only (e.g. "fastapi" not "fastapi==0.100.0")
+- requirements.txt content: one package per line, stdlib packages NEVER listed
+- All implementation tasks depend_on: ["T0", "T1"]
+
 PLAN SIZE RULES (strict):
-- Simple project (1 module): 1-2 tasks
-- Medium project (API + DB): 2-3 tasks
-- Complex project (API + DB + auth): 3-4 tasks
+- Simple project (1 module): 1-2 tasks (+ T0 + T1)
+- Medium project (API + DB): 2-3 tasks (+ T0 + T1)
+- Complex project (API + DB + auth): 3-4 tasks (+ T0 + T1)
 - NEVER create one task per endpoint — group all endpoints for a resource into one task
 
 Output valid JSON only. Start with { and nothing else before it.
 
-EXAMPLE — simple function:
-{"tasks": [{"task_id": "T1", "action": "write_file", "description": "Create add module", "files_to_touch": ["test_add.py", "add.py"], "patch_order": ["test_add.py", "add.py"], "acceptance_criteria": {"target_function": "add", "cases": [{"inputs": ["add(2, 3)"], "expected": "5"}, {"inputs": ["add(0, 0)"], "expected": "0"}, {"inputs": ["add(-1, 1)"], "expected": "0"}]}, "depends_on": []}]}
+EXAMPLE — simple function (T0 scaffold + T1 requirements always first):
+{"tasks": [{"task_id": "T0", "action": "scaffold", "description": "Scaffold project files", "files_to_touch": ["add.py", "test_add.py"], "patch_order": [], "acceptance_criteria": {"target_function": "scaffold", "cases": []}, "depends_on": []}, {"task_id": "T1", "action": "write_file", "description": "Create requirements.txt", "files_to_touch": ["requirements.txt"], "patch_order": ["requirements.txt"], "acceptance_criteria": {"target_function": "requirements", "cases": []}, "depends_on": ["T0"]}, {"task_id": "T2", "action": "write_file", "description": "Create add module", "files_to_touch": ["test_add.py", "add.py"], "patch_order": ["test_add.py", "add.py"], "acceptance_criteria": {"target_function": "add", "cases": [{"inputs": ["add(2, 3)"], "expected": "5"}, {"inputs": ["add(0, 0)"], "expected": "0"}, {"inputs": ["add(-1, 1)"], "expected": "0"}]}, "depends_on": ["T0", "T1"]}]}
 
 EXAMPLE — FastAPI with TestClient (target_function must be an HTTP test function name):
 {"tasks": [{"task_id": "T1", "action": "write_file", "description": "Create FastAPI todo app", "files_to_touch": ["test_todo_api.py", "todo_api.py"], "patch_order": ["test_todo_api.py", "todo_api.py"], "acceptance_criteria": {"target_function": "test_get_todos", "cases": [{"inputs": ["client.get('/todos').status_code"], "expected": "200"}, {"inputs": ["client.get('/todos').json()"], "expected": "[]"}, {"inputs": ["client.post('/todos', json={'title':'x'}).status_code"], "expected": "201"}]}, "depends_on": []}]}

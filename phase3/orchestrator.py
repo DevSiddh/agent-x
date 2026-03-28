@@ -335,6 +335,42 @@ def _call_deepseek(prompt: str) -> str:
         return ""
 
 
+def _execute_scaffold(task: Task, repo_path: Path) -> bool:
+    """
+    T0 scaffold: create stub files + __init__.py for every directory.
+    No DeepSeek call, no pytest — just structure on disk.
+    """
+    try:
+        created_dirs: set[Path] = set()
+        for file_str in task.files_to_touch:
+            fp = repo_path / file_str
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            # Write stub (idempotent — skip if file already exists)
+            if not fp.exists():
+                fp.write_text(f"# {file_str} — stub\n", encoding="utf-8")
+            # Track new dirs for __init__.py injection
+            if fp.parent != repo_path:
+                created_dirs.add(fp.parent)
+
+        # Drop __init__.py in every new sub-directory
+        for d in created_dirs:
+            init = d / "__init__.py"
+            if not init.exists():
+                init.write_text("", encoding="utf-8")
+
+        # git add all stubs so later tasks see them
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=repo_path, capture_output=True, check=False,
+        )
+        log.info("orchestrator.scaffold_done",
+                 files=task.files_to_touch, dirs=[str(d) for d in created_dirs])
+        return True
+    except Exception as exc:
+        log.error("orchestrator.scaffold_error", error=str(exc))
+        return False
+
+
 def _execute_file_ops(
     task: Task,
     repo_path: Path,
@@ -342,6 +378,10 @@ def _execute_file_ops(
     skill_context: str = "",
 ) -> bool:
     """Execute file operations for all files in patch_order. Returns True on success."""
+    # SCAFFOLD tasks: create stubs + structure, no LLM call
+    if task.action == TaskAction.SCAFFOLD:
+        return _execute_scaffold(task, repo_path)
+
     for file_str in task.patch_order:
         file_path = repo_path / file_str
         # Trust the task's declared action; only fall back to FILE_EDIT if unspecified
@@ -367,21 +407,45 @@ def _execute_file_ops(
     return True
 
 
+def _uv_available() -> bool:
+    """True if uv is on PATH."""
+    import shutil
+    return shutil.which("uv") is not None
+
+
 def _run_tests(repo_path: Path, task: Task) -> bool:
     """Run pytest on the task's test file. Returns True if all pass."""
+    import os
     try:
-        # Find the test file for this task; fall back to full repo
+        # Part 1 — install dependencies before running any tests
+        req = repo_path / "requirements.txt"
+        if req.exists():
+            if _uv_available():
+                install_cmd = ["uv", "pip", "install", "-r", str(req)]
+            else:
+                install_cmd = [sys.executable, "-m", "pip", "install", "-r", str(req),
+                               "--break-system-packages", "-q"]
+            subprocess.run(install_cmd, cwd=repo_path, capture_output=True, check=False)
+
+        # Part 2 — Surgical Pytest: 3-tier targeting
+        # Skip pytest entirely for scaffold + requirements tasks — no tests to run
+        _exempt_targets = {"scaffold", "requirements"}
+        if task.action == TaskAction.SCAFFOLD or \
+                task.acceptance_criteria.target_function in _exempt_targets:
+            return True
+
         test_files = [f for f in task.files_to_touch if f.startswith("test_")]
         if test_files:
-            pytest_target = str(repo_path / test_files[0])
+            # Tier 1 — file-level, fail fast, failed first
+            target = str(repo_path / test_files[0])
+            timeout = int(os.environ.get("TEST_TIMEOUT_FILE", "30"))
+            cmd = [sys.executable, "-m", "pytest", target, "-x", "--ff", "--tb=short", "-q"]
         else:
-            pytest_target = str(repo_path)
+            # No test file in this task (config-only task) — skip pytest
+            return True
+
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", pytest_target, "-q", "--tb=short"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            timeout=60,
+            cmd, cwd=repo_path, capture_output=True, text=True, timeout=timeout
         )
         if result.returncode != 0:
             log.warning("orchestrator.test_failed",

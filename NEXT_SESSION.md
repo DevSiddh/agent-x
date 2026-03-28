@@ -1,16 +1,25 @@
 # NEXT_SESSION — read this first, skip BRIEFING.md unless unclear
 # Updated: 2026-03-28
 
-Step:     FIX-2
-Files:    phase3/orchestrator.py → _run_tests()
-Read:     docs/prompts/v41_creation_fixes.md → FIX-2 section only
-Note:     FIX-2 = uv pip install -r requirements.txt before pytest + -x --ff flags + TEST_TIMEOUT_FILE/FULL env vars
+Step:     FIX-5
+Files:    phase3/orchestrator.py → run_loop(), agent_y/reasoner.py → reason()
+Read:     docs/prompts/v41_creation_fixes.md → FIX-5 section only
+Note:     FIX-5 = plan_goal() ignores context.md on resume — read_context() already exists in project_context.py
 Branch:   agent-x/fix-step0
 Tests:    python -m pytest tests/ -q  (657 must pass before touching anything)
 
 Last session (2026-03-28):
   - FIX-1 DONE — _run_ast_mapper per-file (_extract_signatures), global_interfaces injected,
     SkillVault wired (find_relevant + sample_top + used_skill_ids tracked)
+  - FIX-2 DONE — _run_tests(): uv/pip install before pytest, -x --ff flags,
+    skip full suite when no test file, TEST_TIMEOUT_FILE/FULL env vars added
+  - FIX-3 DONE — _execute_scaffold() added, SCAFFOLD branch in _execute_file_ops(),
+    CREATION_SYSTEM_PROMPT updated with T0 rule + topological order + example
+  - FIX-4 DONE — REQUIREMENTS RULE added to CREATION_SYSTEM_PROMPT: T1=requirements.txt
+    always after T0, packages inferred from goal, example updated to T0→T1→T2
+  - SCHEMA FIX — AcceptanceCriteria min_length relaxed to 0, Task validator enforces
+    min 3 cases for impl tasks only (scaffold+requirements exempt)
+  - AUDIT PASSED — smoke-calc: T0 scaffold ✓ T1 requirements ✓ T2 impl ✓ 3 tests pass
   - 657 tests passing
 
 Queue after FIX-2:

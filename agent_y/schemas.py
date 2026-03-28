@@ -30,10 +30,12 @@ class AcceptanceCase(BaseModel):
 
 
 class AcceptanceCriteria(BaseModel):
-    """Anti-reward-hacking gate: min 3 I/O pairs — Happy Path + Edge Case + Error Case."""
+    """Anti-reward-hacking gate: min 3 I/O pairs — Happy Path + Edge Case + Error Case.
+    Exception: scaffold and requirements tasks use cases=[] (no tests for stubs/deps).
+    """
 
     target_function: str
-    cases: list[AcceptanceCase] = Field(min_length=3)
+    cases: list[AcceptanceCase] = Field(min_length=0)  # Task validator enforces min=3 for impl tasks
 
 
 class ArtifactEntry(BaseModel):
@@ -65,6 +67,22 @@ class Task(BaseModel):
     def check_files_limit(self) -> "Task":
         if len(self.files_to_touch) > 3:
             raise ValueError(f"files_to_touch max 3, got {len(self.files_to_touch)}")
+        return self
+
+    @model_validator(mode="after")
+    def check_acceptance_criteria(self) -> "Task":
+        """Scaffold and requirements tasks have no cases. All others need min 3."""
+        exempt = {TaskAction.SCAFFOLD}
+        is_requirements = (
+            self.action == TaskAction.WRITE_FILE
+            and self.acceptance_criteria.target_function == "requirements"
+        )
+        if self.action not in exempt and not is_requirements:
+            if len(self.acceptance_criteria.cases) < 3:
+                raise ValueError(
+                    f"Task {self.task_id}: acceptance_criteria needs min 3 cases, "
+                    f"got {len(self.acceptance_criteria.cases)}"
+                )
         return self
     patch_order: list[str] = []
     acceptance_criteria: AcceptanceCriteria
