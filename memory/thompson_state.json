@@ -1,10 +1,10 @@
 {
   "DependencyError_Python": {
-    "alpha": 774,
-    "beta": 178
+    "alpha": 992,
+    "beta": 268
   },
   "EnvironmentError_Python": {
-    "alpha": 105,
+    "alpha": 139,
     "beta": 1
   },
   "ConfigError_Python": {
@@ -12,7 +12,7 @@
     "beta": 1
   },
   "RuntimeError_Python": {
-    "alpha": 66,
+    "alpha": 86,
     "beta": 1
   },
   "test_skill": {
@@ -64,15 +64,15 @@
     "beta": 1
   },
   "win_skill": {
-    "alpha": 12,
+    "alpha": 29,
     "beta": 1
   },
   "loss_skill": {
     "alpha": 1,
-    "beta": 12
+    "beta": 29
   },
   "nonexistent_skill": {
-    "alpha": 12,
+    "alpha": 29,
     "beta": 1
   }
 }

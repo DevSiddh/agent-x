@@ -1,40 +1,38 @@
 {
-  "project_id": "todo_api_v8",
-  "project_slug": "todo_api_v8",
-  "goal": "Build a FastAPI todo REST API with sqlite3 storage",
+  "project_id": "smoke",
+  "project_slug": "tmpbr02w3i2",
+  "goal": "test",
   "plan": [
     {
       "task_id": "T1",
       "action": "write_file",
-      "description": "Create the main FastAPI application file with a root endpoint",
+      "description": "Create add",
       "files_to_touch": [
-        "test_main.py",
-        "main.py"
+        "app.py"
       ],
       "patch_order": [
-        "test_main.py",
-        "main.py"
+        "app.py"
       ],
       "acceptance_criteria": {
-        "target_function": "app",
+        "target_function": "add",
         "cases": [
           {
             "inputs": [
-              "client.get('/')"
+              "add(1,2)"
             ],
-            "expected": "{'message': 'Todo API v8'}"
+            "expected": "3"
           },
           {
             "inputs": [
-              "client.get('/health')"
+              "add(0,0)"
             ],
-            "expected": "{'status': 'ok'}"
+            "expected": "0"
           },
           {
             "inputs": [
-              "client.get('/nonexistent')"
+              "add(-1,1)"
             ],
-            "expected": "{'detail': 'Not Found'}"
+            "expected": "0"
           }
         ]
       },
@@ -42,245 +40,13 @@
       "status": "failed",
       "failed_attempts": 1,
       "variations_tried": 0,
-      "hint": "",
-      "required": true
-    },
-    {
-      "task_id": "T2",
-      "action": "write_file",
-      "description": "Create the database connection and initialization module",
-      "files_to_touch": [
-        "test_database.py",
-        "database.py"
-      ],
-      "patch_order": [
-        "test_database.py",
-        "database.py"
-      ],
-      "acceptance_criteria": {
-        "target_function": "init_db",
-        "cases": [
-          {
-            "inputs": [
-              "init_db()"
-            ],
-            "expected": "None"
-          },
-          {
-            "inputs": [
-              "get_db()"
-            ],
-            "expected": "<sqlite3.Connection object>"
-          },
-          {
-            "inputs": [
-              "get_db().execute('SELECT name FROM sqlite_master WHERE type=\"table\"').fetchall()"
-            ],
-            "expected": "[('todos',)]"
-          }
-        ]
-      },
-      "depends_on": [],
-      "status": "failed",
-      "failed_attempts": 1,
-      "variations_tried": 0,
-      "hint": "",
-      "required": true
-    },
-    {
-      "task_id": "T3",
-      "action": "write_file",
-      "description": "Create the Todo model (Pydantic) and database schema module",
-      "files_to_touch": [
-        "test_models.py",
-        "models.py"
-      ],
-      "patch_order": [
-        "test_models.py",
-        "models.py"
-      ],
-      "acceptance_criteria": {
-        "target_function": "TodoCreate",
-        "cases": [
-          {
-            "inputs": [
-              "TodoCreate(title='Test', description='Desc')"
-            ],
-            "expected": "TodoCreate(title='Test', description='Desc', completed=False)"
-          },
-          {
-            "inputs": [
-              "TodoCreate(title='')"
-            ],
-            "expected": "TodoCreate(title='', description=None, completed=False)"
-          },
-          {
-            "inputs": [
-              "TodoCreate(title=123)"
-            ],
-            "expected": "TodoCreate(title='123', description=None, completed=False)"
-          }
-        ]
-      },
-      "depends_on": [
-        "T2"
-      ],
-      "status": "blocked",
-      "failed_attempts": 0,
-      "variations_tried": 0,
-      "hint": "",
-      "required": true
-    },
-    {
-      "task_id": "T4",
-      "action": "write_file",
-      "description": "Create the CRUD operations module for todo items",
-      "files_to_touch": [
-        "test_crud.py",
-        "crud.py"
-      ],
-      "patch_order": [
-        "test_crud.py",
-        "crud.py"
-      ],
-      "acceptance_criteria": {
-        "target_function": "create_todo",
-        "cases": [
-          {
-            "inputs": [
-              "create_todo(db, {'title': 'Task', 'description': 'Desc'})"
-            ],
-            "expected": "{'id': 1, 'title': 'Task', 'description': 'Desc', 'completed': False}"
-          },
-          {
-            "inputs": [
-              "create_todo(db, {'title': ''})"
-            ],
-            "expected": "{'id': 2, 'title': '', 'description': None, 'completed': False}"
-          },
-          {
-            "inputs": [
-              "create_todo(None, {'title': 'Test'})"
-            ],
-            "expected": "AttributeError"
-          }
-        ]
-      },
-      "depends_on": [
-        "T2",
-        "T3"
-      ],
-      "status": "blocked",
-      "failed_attempts": 0,
-      "variations_tried": 0,
-      "hint": "",
-      "required": true
-    },
-    {
-      "task_id": "T5",
-      "action": "write_file",
-      "description": "Create the API endpoints for todo operations",
-      "files_to_touch": [
-        "test_routers.py",
-        "routers.py"
-      ],
-      "patch_order": [
-        "test_routers.py",
-        "routers.py"
-      ],
-      "acceptance_criteria": {
-        "target_function": "app.include_router",
-        "cases": [
-          {
-            "inputs": [
-              "client.post('/todos/', json={'title': 'New'})"
-            ],
-            "expected": "{'id': 1, 'title': 'New', 'description': None, 'completed': False}"
-          },
-          {
-            "inputs": [
-              "client.get('/todos/999')"
-            ],
-            "expected": "{'detail': 'Todo not found'}"
-          },
-          {
-            "inputs": [
-              "client.post('/todos/', json={})"
-            ],
-            "expected": "{'detail': [{'type': 'missing', 'loc': ['body', 'title'], 'msg': 'Field required', 'input': {}}]}"
-          }
-        ]
-      },
-      "depends_on": [
-        "T1",
-        "T3",
-        "T4"
-      ],
-      "status": "blocked",
-      "failed_attempts": 0,
-      "variations_tried": 0,
-      "hint": "",
-      "required": true
-    },
-    {
-      "task_id": "T6",
-      "action": "write_file",
-      "description": "Update main.py to include database initialization and todo router",
-      "files_to_touch": [
-        "test_main_update.py",
-        "main.py"
-      ],
-      "patch_order": [
-        "test_main_update.py",
-        "main.py"
-      ],
-      "acceptance_criteria": {
-        "target_function": "app",
-        "cases": [
-          {
-            "inputs": [
-              "client.get('/todos/')"
-            ],
-            "expected": "[]"
-          },
-          {
-            "inputs": [
-              "client.post('/todos/', json={'title': 'Main Test'}).json()['id']",
-              "client.get(f'/todos/{id}')"
-            ],
-            "expected": "{'id': id, 'title': 'Main Test', 'description': None, 'completed': False}"
-          },
-          {
-            "inputs": [
-              "client.put('/todos/999', json={'title': 'Update'})"
-            ],
-            "expected": "{'detail': 'Todo not found'}"
-          }
-        ]
-      },
-      "depends_on": [
-        "T1",
-        "T5"
-      ],
-      "status": "blocked",
-      "failed_attempts": 0,
-      "variations_tried": 0,
-      "hint": "",
-      "required": true
+      "hint": ""
     }
   ],
-  "current_task_id": "T2",
-  "failed_task_streak": 2,
-  "last_failed_diff": "",
+  "current_task_id": "T1",
+  "failed_task_streak": 1,
   "global_interfaces": {},
   "artifacts": [],
   "github_repo": "",
-  "pr_number": null,
-  "plan_approved": false,
-  "interrupt_queue": [
-    "are u buliding ?",
-    "what u created",
-    "im asking what u created so far",
-    "stop"
-  ]
+  "pr_number": null
 }
