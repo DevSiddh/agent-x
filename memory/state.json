@@ -40,13 +40,21 @@
       "status": "failed",
       "failed_attempts": 1,
       "variations_tried": 0,
-      "hint": ""
+      "hint": "",
+      "required": true
     }
   ],
   "current_task_id": "T1",
   "failed_task_streak": 1,
+  "last_failed_diff": "",
   "global_interfaces": {},
   "artifacts": [],
   "github_repo": "",
-  "pr_number": null
+  "pr_number": null,
+  "plan_approved": false,
+  "interrupt_queue": [
+    "build a fastapi backend",
+    "build a fastapi backend",
+    "sqlite please"
+  ]
 }
