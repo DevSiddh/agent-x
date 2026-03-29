@@ -1,10 +1,10 @@
 {
   "DependencyError_Python": {
-    "alpha": 640,
-    "beta": 118
+    "alpha": 774,
+    "beta": 178
   },
   "EnvironmentError_Python": {
-    "alpha": 94,
+    "alpha": 105,
     "beta": 1
   },
   "ConfigError_Python": {
@@ -12,7 +12,67 @@
     "beta": 1
   },
   "RuntimeError_Python": {
-    "alpha": 55,
+    "alpha": 66,
+    "beta": 1
+  },
+  "test_skill": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "my_skill": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_0": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_1": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_2": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_3": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_4": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_a": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "skill_b": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "low_trust": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "high_trust": {
+    "alpha": 1,
+    "beta": 1
+  },
+  "win_skill": {
+    "alpha": 12,
+    "beta": 1
+  },
+  "loss_skill": {
+    "alpha": 1,
+    "beta": 12
+  },
+  "nonexistent_skill": {
+    "alpha": 12,
     "beta": 1
   }
 }
