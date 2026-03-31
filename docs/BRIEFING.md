@@ -348,15 +348,29 @@ User: [next iter] [fix first] [ship it]
 ## PRIORITY ORDER (what to build next)
 
 ```
+── PENDING GAPS (close these first) ──────────────────────────────────────
 1. FIX-3b  template scaffold library                                     ← NEXT
 2. FIX-19  STATE_PATH multi-project isolation
 3. FIX-3c  tiered complexity gates (gate: after FIX-3b)
-4. v4.2    StateDiffSummary + materiality gate     (~30 lines)
-5. v4.2    Historical Mandates in Agent-Y prompt   (~30 lines)
-6. v4.2    Stream <think> reasoning to Telegram    (~10 lines)
-7. Hybrid  embeddings all-MiniLM-L6-v2             (after #4-6 proven)
-8. v4.3    TDD-ReAct                               (gate: 10 real projects)
+
+── FROM CLAUDE CODE LEAKED SOURCE (add after gaps closed) ────────────────
+4. FIX-20  memoized context blocks        (~8L, orchestrator.py — zero risk)
+5. FIX-21  large error → disk offload     (~10L, needs MEMORY_ROOT from FIX-19)
+6. FIX-22  retry context compaction       (~12L, after FIX-2 retry loop clean)
+7. FIX-23  plan verification gate         (~20L, after FIX-11 Telegram notify)
+8. FIX-24  auto memory extraction         (~35L, after FIX-23 post-build hook)
+9. FIX-25  cron scheduling in brief.yaml  (~33L, after FIX-19 MEMORY_ROOT)
+
+── v4.2 PROACTIVE ARCHITECTURE ───────────────────────────────────────────
+10. v4.2   StateDiffSummary + materiality gate     (~30 lines)
+11. v4.2   Historical Mandates in Agent-Y prompt   (~30 lines — feeds from FIX-24 auto_memory.jsonl)
+12. v4.2   Stream <think> reasoning to Telegram    (~10 lines)
+13. Hybrid embeddings all-MiniLM-L6-v2             (after #10-12 proven)
+14. v4.3   TDD-ReAct                               (gate: 10 real projects)
 ```
+
+Source specs for FIX-20 through FIX-25: @docs/prompts/v41_creation_fixes.md → last section
+Origin: claude-code-main/ (cloned 2026-03-31) — leaked Claude Code TypeScript source
 
 ---
 

@@ -2514,3 +2514,579 @@ Satisfies "each retry prompt MUST differ" rule automatically.
 **Size:** ~40 lines new (complexity_gate.py) + ~5 lines mod in orchestrator.py
 **Dependencies:** radon + ast — both already in pipeline (FIX-9). Zero new installs.
 **Done condition:** pytest passes + test that config.py 90 lines passes gate + service.py CC=12 rejected with correct message.
+
+---
+
+---
+
+## FROM CLAUDE CODE LEAKED SOURCE — FIX-20 through FIX-24
+## Source: claude-code-main/ (cloned 2026-03-31) + mintlify how-it-works page
+## Pattern origin noted per fix. All adapted to Python + DeepSeek stack.
+
+---
+
+### FIX-20 — Memoized Context Blocks (prompt token savings)
+
+**Files:**
+- `phase3/orchestrator.py`    MOD — _build_agent_x_prompt() cache layer (~8 lines)
+
+**Source:** Claude Code `query.ts` + `utils/api.ts` — `prependUserContext` / `appendSystemContext`
+both use `lodash/memoize` so system context is not rebuilt on every API call.
+
+**What is broken:**
+`_build_agent_x_prompt()` calls `_run_ast_mapper()` + `vault.get_context_block()` on every task.
+On Task 8 of a 12-task project: `global_interfaces` has not changed since Task 7 wrote models.py.
+`skill_vault_block` has not changed either — same goal keyword, same top-3 skills.
+Both are rebuilt and re-serialized from scratch. ~300 tokens of identical work per task.
+
+**What changes — ~8 lines, orchestrator.py only:**
+
+```python
+# orchestrator.py — add two cache fields to ProjectContext or Orchestrator class
+
+_cached_interfaces_hash: str = ""
+_cached_interfaces_block: str = ""
+_cached_skill_block: str = ""
+
+def _get_interfaces_block(self, state: SharedState) -> str:
+    import hashlib
+    current = json.dumps(state.global_interfaces, sort_keys=True)
+    h = hashlib.md5(current.encode()).hexdigest()[:8]
+    if h != self._cached_interfaces_hash:
+        self._cached_interfaces_hash = h
+        self._cached_interfaces_block = _format_interfaces(state.global_interfaces)
+    return self._cached_interfaces_block
+
+def _get_skill_block(self, task_description: str) -> str:
+    # Only changes when description changes — one cache hit per task
+    if not self._cached_skill_block:
+        self._cached_skill_block = self.vault.get_context_block(task_description)
+    return self._cached_skill_block
+```
+
+Replace direct calls in `_build_agent_x_prompt()`:
+```python
+# Before:
+interfaces_block = _format_interfaces(state.global_interfaces)
+skill_block = self.vault.get_context_block(task.description)
+
+# After:
+interfaces_block = self._get_interfaces_block(state)
+skill_block = self._get_skill_block(task.description)
+```
+
+Invalidation rule:
+- `_cached_interfaces_block` → invalidated when md5(global_interfaces) changes (only after write_file succeeds)
+- `_cached_skill_block` → invalidated when a new task starts with a different description
+- Both reset on project start (ProjectContext __init__)
+
+**Impact:**
+- Task 2-12: ~300 tokens saved per task on rebuild avoidance
+- 12-task project: saves ~3,000 tokens = ~$0.003 per project at DeepSeek prices
+- Bigger gain: `_run_ast_mapper()` is IO + CPU. Skipping 10/12 calls on a 12-task project
+  cuts orchestrator wall-clock time by ~15% on slow VPS disk.
+
+**Build gate:** no gate — standalone, zero risk.
+**Size:** ~8 lines in orchestrator.py. Zero new files.
+**Dependencies:** hashlib — stdlib. Zero new installs.
+**Done condition:** pytest passes + test that interfaces_block is NOT rebuilt when global_interfaces
+  unchanged between tasks + test that it IS rebuilt after write_file() updates a model file.
+
+---
+
+### FIX-21 — Large Error Output → Disk Offload
+
+**Files:**
+- `phase3/orchestrator.py`    MOD — retry loop error handling (~10 lines)
+
+**Source:** Claude Code `utils/toolResultStorage.ts` → `applyToolResultBudget()` in `query.ts`.
+When tool output exceeds `maxResultSizeChars`, Claude Code writes result to disk and sends
+a truncated preview + file path pointer to the model instead of the full output.
+
+**What is broken:**
+`_run_tests()` captures stdout + stderr and passes the full output to the retry prompt.
+On a project with 30 tests and multiple failures, pytest output can be 200-400 lines.
+This floods the DeepSeek context on attempt 1, leaving less room for attempt 2 and 3.
+By attempt 3 the accumulated error history pushes toward DeepSeek's context limit.
+The fix in CLAUDE.md already caps error lines at 20 — but there is no disk offload.
+The 200-line output is just silently truncated. The full trace is lost.
+
+**What changes — ~10 lines in retry loop:**
+
+```python
+# orchestrator.py — in _retry_loop() or wherever error output is handled
+
+MAX_ERROR_LINES_TO_LLM = int(os.environ.get("MAX_ERROR_LINES", "20"))
+
+def _prepare_error_output(
+    error_output: str,
+    task_id: str,
+    slug: str,
+    attempt: int,
+) -> str:
+    lines = error_output.splitlines()
+    if len(lines) <= MAX_ERROR_LINES_TO_LLM:
+        return error_output   # fits — send as-is
+
+    # Disk offload
+    log_dir = Path(os.environ["MEMORY_ROOT"]) / slug / "task_logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"task_{task_id}_attempt_{attempt}.log"
+    log_path.write_text(error_output)
+
+    preview = "\n".join(lines[:MAX_ERROR_LINES_TO_LLM])
+    return (
+        f"{preview}\n"
+        f"... [{len(lines) - MAX_ERROR_LINES_TO_LLM} more lines truncated]"
+        f"[full log: {log_path}]"
+    )
+```
+
+Call site in retry loop:
+```python
+error_for_prompt = _prepare_error_output(
+    error_output=test_result.stderr + test_result.stdout,
+    task_id=task.task_id,
+    slug=state.project_slug,
+    attempt=attempt_number,
+)
+# error_for_prompt replaces raw output in retry prompt
+```
+
+**.env.example addition:**
+```
+MAX_ERROR_LINES=20   # lines of error output sent to DeepSeek per retry
+```
+
+**What this gives you:**
+- Full error log on disk for debugging (not lost, just not in prompt)
+- DeepSeek context stays clean across all 3 attempts
+- `_prepare_error_output()` is pure — easy to test
+
+**Build gate:** after FIX-2 (retry loop already tested).
+**Size:** ~10 lines in orchestrator.py. Zero new files (uses MEMORY_ROOT from FIX-19).
+**Dependencies:** pathlib, os — stdlib. MEMORY_ROOT already required by FIX-19.
+**Done condition:** pytest passes + test that 200-line error → file written to task_logs/ +
+  prompt receives exactly 20 lines + pointer + test that 10-line error → no file written.
+
+---
+
+### FIX-22 — Retry Context Compaction
+
+**Files:**
+- `phase3/orchestrator.py`    MOD — retry loop attempt accumulation (~12 lines)
+
+**Source:** Claude Code `services/compact/autoCompact.ts` — when conversation approaches context
+window limit, Claude Code compacts prior messages into a summary before the next API call.
+The compaction threshold is `effectiveContextWindow - AUTOCOMPACT_BUFFER_TOKENS (13,000)`.
+Claude Code measured: p99.99 compact summary output = 17,387 tokens → reserves 20k for summary.
+
+**What is broken:**
+Agent-X retry loop accumulates context across 3 attempts:
+```
+Attempt 1: system_prompt + task_prompt + attempt_1_output  (grows)
+Attempt 2: all of above + rejection_reason_1 + attempt_2_output  (grows more)
+Attempt 3: all of above + rejection_reason_2 + attempt_3_output  (largest)
+```
+By attempt 3 on a complex task: accumulated context can reach 8,000-12,000 tokens.
+DeepSeek-chat context limit = 16,384 tokens. Attempt 3 can fail with context overflow —
+not a logic error, not a code error — just the conversation history being too large.
+This is the exact failure mode Claude Code's autoCompact was built to solve.
+
+**What changes — ~12 lines in orchestrator.py retry loop:**
+
+No LLM call needed. Python-side compaction: replace prior attempt details with a summary string.
+
+```python
+# orchestrator.py — retry accumulator
+
+def _compact_attempt_history(attempts: list[dict]) -> str:
+    """Compact prior attempt outputs into a single summary block.
+    Called before attempt 3 to prevent context overflow."""
+    lines = []
+    for i, a in enumerate(attempts, 1):
+        # Keep rejection reason (always <5 lines) + first 5 lines of error
+        err_preview = "\n".join(a["error"].splitlines()[:5])
+        lines.append(f"Attempt {i}: rejected — {a['reason']}. Error: {err_preview}")
+    return "Prior attempts summary:\n" + "\n".join(lines)
+
+# In the retry loop:
+MAX_RETRIES = 3
+accumulated: list[dict] = []
+
+for attempt in range(1, MAX_RETRIES + 1):
+    if attempt == MAX_RETRIES and len(accumulated) >= 2:
+        # Compact before final attempt — replace full history with summary
+        history_block = _compact_attempt_history(accumulated)
+    else:
+        history_block = _format_full_history(accumulated)
+
+    prompt = _build_retry_prompt(task, history_block, attempt)
+    result = _call_deepseek(prompt)
+    accumulated.append({"reason": result.rejection_reason, "error": result.error})
+```
+
+**Why no LLM compaction call (unlike Claude Code):**
+Claude Code compacts by asking Claude to summarize — expensive, adds latency.
+Agent-X compaction is deterministic: keep rejection_reason (always short) + first 5 error lines.
+No API call. No latency. Same result: attempt 3 context is bounded regardless of attempt 1-2 size.
+
+**Impact:**
+Attempt 3 context before FIX-22: 8,000-12,000 tokens (overflow risk on DeepSeek 16k limit).
+Attempt 3 context after FIX-22: bounded at ~3,000 tokens (system + task + compact summary).
+Hard tasks that currently fail at attempt 3 due to context overflow: fixed.
+
+**Build gate:** after FIX-2 retry loop is clean and tested.
+**Size:** ~12 lines in orchestrator.py. Zero new files.
+**Dependencies:** none. Pure Python string manipulation.
+**Done condition:** pytest passes + test that attempt 3 prompt is shorter than attempt 2 prompt
+  + test that compact summary contains rejection_reason from attempt 1 and 2
+  + test that attempt 3 not triggered when MAX_RETRIES=1 (no compaction needed).
+
+---
+
+### FIX-23 — Plan Verification Gate (post-build goal check)
+
+**Files:**
+- `phase3/orchestrator.py`    MOD — after is_done(), before final Telegram report (~20 lines)
+
+**Source:** Claude Code `tools/VerifyPlanExecutionTool/` — `CLAUDE_CODE_VERIFY_PLAN` feature flag.
+After all tasks complete, asks Claude: "Was the original goal actually achieved?"
+Returns pass/fail + reason. Used as final quality gate before marking project complete.
+
+**What is broken:**
+`is_done()` returns True when all tasks have status DONE or SKIPPED.
+This is task completion, not goal completion.
+Real failure modes it misses:
+- T1 wrote models.py, T4 wrote routes.py — both passed pytest — but main.py never imports routes
+  → app starts, no endpoints respond, goal not achieved
+- Brief said "with user authentication" — T6 (auth) was skipped by user — goal partially achieved
+- All 8 tasks passed — but the FastAPI app raises ImportError on startup — goal not achieved
+
+Agent-X has no mechanism to catch these. Task status = proxy for goal. A bad proxy.
+
+**What changes — one function + one call in run_loop():**
+
+```python
+# orchestrator.py
+
+def _verify_goal(state: SharedState, repo_path: Path) -> tuple[bool, str]:
+    """One DeepSeek call after is_done(). Checks if brief was satisfied."""
+    goal = state.goal
+    completed = [t.task_id + ": " + t.description for t in state.plan if t.status == "done"]
+    skipped   = [t.task_id + ": " + t.description for t in state.plan if t.status == "skipped"]
+
+    context_md = (repo_path / ".agent" / "context.md").read_text() \
+                 if (repo_path / ".agent" / "context.md").exists() else ""
+
+    prompt = f"""Original goal: {goal}
+
+Tasks completed:
+{chr(10).join(completed)}
+
+Tasks skipped:
+{chr(10).join(skipped) if skipped else "None"}
+
+Project context (what was actually built):
+{context_md[:1000]}
+
+Question: Was the original goal fully achieved?
+Answer with PASS or FAIL, then one sentence explaining why.
+Format: PASS: <reason>  OR  FAIL: <reason>"""
+
+    response = _call_deepseek(prompt, max_tokens=80)
+    passed = response.strip().upper().startswith("PASS")
+    return passed, response.strip()
+
+# In run_loop(), after is_done():
+if is_done(state):
+    verified, verdict = _verify_goal(state, repo_path)
+    status_emoji = "✅" if verified else "⚠️"
+    _telegram_notify(
+        f"{status_emoji} Build complete.\n"
+        f"Goal check: {verdict}\n"
+        f"Tasks: {len(done)} done / {len(skipped)} skipped"
+    )
+```
+
+**What this catches:**
+- Missing wiring (routes never imported into main.py) — FAIL: "FastAPI app has no registered routes"
+- Partial skip (auth skipped, goal required it) — FAIL: "Authentication was required but skipped"
+- Silent stub leak — FAIL: "context.md shows auth.py still has pass-only body"
+- Clean build — PASS: "All CRUD endpoints wired, tests green, app runnable"
+
+**Cost:** one DeepSeek call per completed project. max_tokens=80. ~$0.0001.
+**Not a blocker:** FAIL verdict does not halt the build — it notifies. User decides what to do.
+This is a diagnostic signal, not a hard gate. Hard gates are within the build loop (FIX-9/FIX-3c).
+
+**Build gate:** after FIX-11 (Telegram notify infrastructure exists).
+**Size:** ~20 lines in orchestrator.py. Zero new files.
+**Dependencies:** existing DeepSeek client + Telegram notify. Zero new installs.
+**Done condition:** pytest passes + test PASS verdict when all tasks done + goal matches context +
+  test FAIL verdict when auth task skipped + goal string contains "authentication" +
+  test prompt length < 1200 tokens (context_md hard-capped at 1000 chars).
+
+---
+
+### FIX-24 — Auto Memory Extraction (post-project learning)
+
+**Files:**
+- `phase3/orchestrator.py`          MOD — call extract_project_memory() after _verify_goal() (~5 lines)
+- `memory/auto_extractor.py`        NEW — extract_project_memory() (~30 lines)
+
+**Source:** Claude Code `services/extractMemories/extractMemories.ts` + `prompts.ts`.
+After each conversation turn where the main agent did not write memories itself,
+Claude Code forks a background memory extraction agent that reads the last N messages
+and writes user/feedback/project/reference memories. The extraction agent has read-only
+access to conversation + write-only access to memory directory.
+
+**What is broken:**
+Agent-X writes to `memory.jsonl` at task boundaries (outcome + Thompson update).
+`retrospective.py` extracts skills after `failed_attempts >= 2 then succeeded`.
+Neither captures project-level learnings:
+- "SQLite + SQLAlchemy sync engine works for this user's typical bot scale"
+- "FastAPI + httpx test client: always install httpx[sync] or fixtures fail"
+- "This project took 2 iterations — bottleneck was missing __init__.py in tests/"
+These are not code patterns (skill_vault territory) and not error traces (memory.jsonl territory).
+They are project-level facts. Currently discarded after every project. Lost signal.
+
+**What changes:**
+
+```python
+# memory/auto_extractor.py
+
+import json, os
+from pathlib import Path
+from typing import Any
+
+EXTRACTION_PROMPT = """You are a memory extraction agent for Agent-XYZ.
+A project just completed. Extract 1-3 project-level learnings as memory entries.
+
+DO NOT extract:
+- Code patterns or snippets (those go to skill_vault.jsonl)
+- Per-task error traces (those are already in memory.jsonl)
+- Things obvious from the stack (e.g. "FastAPI needs Python")
+
+DO extract:
+- Stack decisions that were non-obvious (e.g. "sync not async for this scale")
+- Structural patterns that saved or cost iterations
+- User preferences revealed during build (e.g. "prefers SQLite over PostgreSQL")
+- Project-type-specific gotchas (e.g. "Telegram bots: always handle getUpdates offset")
+
+Project goal: {goal}
+Stack used: {stack}
+Iterations: {iteration_count}
+Outcome: {outcome}
+Skipped tasks: {skipped}
+Context summary:
+{context_summary}
+
+Output JSON array of 1-3 entries, each:
+{{"category": "stack_decision|structural|user_pref|gotcha",
+  "fact": "one sentence, specific and actionable",
+  "applies_to": "project type or stack keyword"}}
+
+Output ONLY the JSON array. No explanation."""
+
+def extract_project_memory(
+    state: dict[str, Any],
+    context_md: str,
+    outcome: str,
+    memory_path: Path,
+) -> int:
+    """One DeepSeek call after project completion. Writes 0-3 entries to memory.jsonl.
+    Returns count of entries written."""
+    from phase3.deepseek_client import call_deepseek  # existing client
+
+    skipped = [t["task_id"] for t in state.get("plan", []) if t.get("status") == "skipped"]
+    prompt = EXTRACTION_PROMPT.format(
+        goal=state.get("goal", ""),
+        stack=state.get("language", "python"),
+        iteration_count=state.get("iteration_count", 1),
+        outcome=outcome,
+        skipped=", ".join(skipped) if skipped else "None",
+        context_summary=context_md[:800],
+    )
+
+    raw = call_deepseek(prompt, max_tokens=300)
+    try:
+        entries = json.loads(raw.strip())
+    except json.JSONDecodeError:
+        return 0   # malformed → skip silently, never crash
+
+    written = 0
+    with open(memory_path, "a") as f:
+        for entry in entries[:3]:
+            if not isinstance(entry, dict):
+                continue
+            record = {
+                "source": "auto_extractor",
+                "project_slug": state.get("project_slug", "unknown"),
+                "category": entry.get("category", "unknown"),
+                "fact": entry.get("fact", ""),
+                "applies_to": entry.get("applies_to", ""),
+                "outcome": outcome,
+            }
+            f.write(json.dumps(record) + "\n")
+            written += 1
+    return written
+```
+
+Call site in `orchestrator.py` — after `_verify_goal()`:
+```python
+from memory.auto_extractor import extract_project_memory
+
+n = extract_project_memory(
+    state=state.model_dump(),
+    context_md=context_md,
+    outcome="success" if verified else "partial",
+    memory_path=Path(os.environ["MEMORY_ROOT"]) / "auto_memory.jsonl",
+)
+log.info("auto_extractor.done", entries_written=n)
+```
+
+**Separate file from memory.jsonl:**
+Auto-extracted entries go to `memory/auto_memory.jsonl` (not `memory.jsonl`).
+Reason: `memory.jsonl` contains per-task execution traces used for BM25 retrieval.
+Auto-extracted entries are project-level facts — different schema, different query path.
+When Historical Mandates (v4.2) are built: `auto_memory.jsonl` is the primary source.
+
+**Cost:** one DeepSeek call per completed project. max_tokens=300. ~$0.0003.
+
+**Build gate:** after FIX-23 (post-build hook in orchestrator exists). MEMORY_ROOT from FIX-19.
+**Size:** ~30 lines auto_extractor.py + ~5 lines orchestrator.py.
+**Dependencies:** existing DeepSeek client + json — stdlib. Zero new installs.
+**Done condition:** pytest passes + test that malformed LLM JSON → returns 0, no crash +
+  test that 3 valid entries → written to auto_memory.jsonl with correct schema +
+  test that entries > 3 → only first 3 written (cap enforced) +
+  test auto_memory.jsonl is separate from memory.jsonl (no cross-write).
+
+---
+
+### FIX-25 — Scheduled Project Triggers (cron via brief.yaml)
+
+**Files:**
+- `phase3/brief_watcher.py`     MOD — read `schedule:` field from brief.yaml (~8 lines)
+- `phase3/scheduler.py`         NEW — register_cron(), list_crons(), cancel_cron() (~25 lines)
+
+**Source:** Claude Code `tools/ScheduleCronTool/` — `CronCreateTool` with 5-field cron syntax,
+auto-expiry after 7 days, jitter for load distribution, one-shot mode (recurring: false).
+Claude Code uses this for: recurring remote agents, scheduled cleanup, automated deployments.
+
+**What is missing:**
+`brief_watcher.py` is file-drop triggered (watchdog on /projects/new/).
+Telegram is user-message triggered.
+Neither supports time-based triggering: "build this overnight", "retry failed project at 3am",
+"run this data pipeline every night at midnight".
+Time-triggered builds are the natural extension of the existing trigger system.
+
+**What changes:**
+
+`brief.yaml` gets one optional field:
+```yaml
+goal: "Build a crypto price alert bot"
+schedule: "0 2 * * *"   # optional — standard 5-field cron. Omit for immediate trigger.
+# schedule: "once"      # trigger once at next window (30 min from now)
+```
+
+```python
+# phase3/scheduler.py
+
+import json, os, threading
+from pathlib import Path
+from datetime import datetime
+from croniter import croniter   # pip install croniter — already used in similar projects
+
+CRON_REGISTRY = Path(os.environ.get("MEMORY_ROOT", "./memory")) / "cron_jobs.jsonl"
+
+def register_cron(slug: str, goal: str, cron_expr: str, brief_path: str) -> str:
+    """Register a scheduled project trigger. Returns job_id."""
+    job_id = f"cron_{slug}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    entry = {
+        "job_id": job_id,
+        "slug": slug,
+        "goal": goal,
+        "cron_expr": cron_expr,
+        "brief_path": str(brief_path),
+        "created_at": datetime.utcnow().isoformat(),
+        "expires_at": None,   # None = no expiry (user controls lifecycle)
+        "last_triggered": None,
+        "status": "active",
+    }
+    with open(CRON_REGISTRY, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+    return job_id
+
+def get_due_jobs() -> list[dict]:
+    """Return all active cron jobs that are due to run now."""
+    if not CRON_REGISTRY.exists():
+        return []
+    now = datetime.utcnow()
+    due = []
+    seen_ids = set()
+    for line in CRON_REGISTRY.read_text().splitlines():
+        try:
+            job = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if job["job_id"] in seen_ids or job.get("status") != "active":
+            continue
+        seen_ids.add(job["job_id"])
+        last = datetime.fromisoformat(job["last_triggered"]) \
+               if job["last_triggered"] else datetime(2000, 1, 1)
+        cron = croniter(job["cron_expr"], last)
+        if cron.get_next(datetime) <= now:
+            due.append(job)
+    return due
+
+def cancel_cron(job_id: str) -> None:
+    """Mark a cron job as cancelled (append-only log — no rewrite)."""
+    with open(CRON_REGISTRY, "a") as f:
+        f.write(json.dumps({"job_id": job_id, "status": "cancelled"}) + "\n")
+```
+
+`brief_watcher.py` extension (~8 lines):
+```python
+# In process_brief() — after reading brief.yaml:
+schedule_expr = brief.get("schedule")
+if schedule_expr:
+    job_id = register_cron(
+        slug=brief["goal"][:20].lower().replace(" ", "_"),
+        goal=brief["goal"],
+        cron_expr=schedule_expr,
+        brief_path=brief_path,
+    )
+    _telegram_notify(f"⏰ Scheduled: {brief['goal']}\nCron: {schedule_expr}\nJob: {job_id}")
+    return   # do NOT run_loop() now — scheduler will trigger at right time
+# else: run_loop() immediately as before
+```
+
+Scheduler polling (add to brief_watcher.py main loop — watchdog already polls every 1s):
+```python
+# Check cron jobs every 60s alongside file watching
+if time.time() - last_cron_check > 60:
+    for job in get_due_jobs():
+        _telegram_notify(f"⏰ Cron trigger: {job['goal']}")
+        threading.Thread(target=run_loop, args=(job["slug"],), daemon=True).start()
+        _mark_triggered(job["job_id"])
+    last_cron_check = time.time()
+```
+
+**Design decisions (from Claude Code patterns):**
+- No expiry by default (unlike Claude Code's 7-day auto-expiry) — user controls lifecycle via Telegram
+- Append-only JSONL log (consistent with memory.jsonl pattern — never rewrite, always append)
+- Deduplication via seen_ids on read (same as memory.jsonl dedup pattern)
+- croniter not APScheduler — lighter, no background thread needed, no port, no DB
+
+**Telegram commands (extend existing bot):**
+```
+/crons           → list active scheduled jobs
+/cancel <job_id> → cancel a cron job
+```
+
+**Build gate:** after FIX-19 (MEMORY_ROOT in .env). Requires brief_watcher.py working.
+**Size:** ~25 lines scheduler.py + ~8 lines brief_watcher.py MOD.
+**Dependencies:** `croniter` — `uv pip install croniter`. Lightweight, no sub-dependencies.
+**Done condition:** pytest passes + test that due job is returned when cron fires +
+  test that cancelled job not returned + test that malformed JSONL line skipped silently +
+  test that brief with `schedule:` field registers cron and does NOT call run_loop() immediately.
