@@ -1,0 +1,5 @@
+freqtrade>=2024.0
+ta>=0.10.0
+sqlalchemy>=2.0.0
+python-telegram-bot>=21.0.0
+hyperopt>=0.2.7

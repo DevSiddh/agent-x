@@ -1,0 +1,94 @@
+version: "1.0"
+generated: "2026-03-31"
+niches:
+  crypto:
+    easy:
+      - name: price_feed
+        source: CryptoSignal/Crypto-Signal
+        stars: 5501
+        core_files: 4
+        tags: [ccxt, rsi, signals, alerts]
+    medium:
+      - name: grid_bot
+        source: jordantete/grid_trading_bot
+        stars: 129
+        core_files: 8
+        tags: [asyncio, ccxt-pro, grid-trading, sqlite, plotly]
+    hard:
+      - name: full_trading_system
+        source: freqtrade/freqtrade
+        stars: 48178
+        core_files: 18
+        tags: [multi-exchange, backtesting, hyperopt, telegram, pipeline]
+  stocks:
+    easy:
+      - name: price_alert
+        source: yfinance-pattern
+        core_files: 4
+        tags: [yfinance, alerts, thresholds]
+    medium:
+      - name: backtest_strategy
+        source: mementum/backtrader
+        stars: 21019
+        core_files: 9
+        tags: [backtrader, sma, rsi, broker-simulation, sharpe]
+    hard:
+      - name: quant_platform
+        source: microsoft/qlib
+        stars: 39418
+        core_files: 16
+        tags: [lightgbm, alpha-factors, mlflow, event-driven]
+  bots:
+    easy:
+      - name: echo_bot
+        source: python-telegram-bot/python-telegram-bot
+        stars: 28996
+        core_files: 3
+        tags: [telegram, async, handlers]
+    medium:
+      - name: ai_telegram_bot
+        source: python-telegram-bot + openai
+        core_files: 7
+        tags: [telegram, openai, deepseek, memory, streaming]
+    hard:
+      - name: full_discord_bot
+        source: Cog-Creators/Red-DiscordBot
+        stars: 5481
+        core_files: 15
+        tags: [discord.py, cogs, music, moderation, ai-chat, sqlalchemy]
+  web:
+    easy:
+      - name: scraper
+        source: scrapy/scrapy
+        stars: 60985
+        core_files: 5
+        tags: [scrapy, css-selectors, pipeline, csv]
+    medium:
+      - name: scraper_api
+        source: scrapy + fastapi pattern
+        core_files: 8
+        tags: [fastapi, playwright, async, job-queue, sqlite]
+    hard:
+      - name: full_automation
+        source: seleniumbase/seleniumbase
+        stars: 12534
+        core_files: 14
+        tags: [playwright, stealth, proxy, scheduler, anti-detection]
+  data:
+    easy:
+      - name: csv_pipeline
+        source: pandas-pattern
+        core_files: 4
+        tags: [pandas, pydantic, csv, transforms]
+    medium:
+      - name: etl_pipeline
+        source: prefecthq/prefect
+        stars: 21982
+        core_files: 9
+        tags: [prefect, extract, transform, load, postgres, s3]
+    hard:
+      - name: realtime_platform
+        source: pathwaycom/pathway
+        stars: 63107
+        core_files: 16
+        tags: [pathway, kafka, streaming, websocket, prometheus, streamlit]
